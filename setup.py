@@ -33,8 +33,8 @@ setup(
     zip_safe=True,
     maintainer='soham',
     maintainer_email='soham@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='RTAB-Map depth-camera mapping, Nav2 navigation and frontier exploration for a rover in Gazebo and a real RealSense D435i',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',

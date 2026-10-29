@@ -52,7 +52,7 @@ Needed first: ROS 2 Humble with Gazebo Classic (`gazebo_ros_pkgs`), and RTAB-Map
 ```bash
 mkdir -p ~/depth_mapping/src
 cd ~/depth_mapping/src
-git clone <repository-url> depth        # the folder must be src/depth
+git clone https://github.com/Soham2135696/rtabmap-nav2-frontier-exploration.git depth   # the folder must be src/depth
 cd ~/depth_mapping
 source /opt/ros/humble/setup.bash
 source ~/rtabmap_ws/install/setup.bash

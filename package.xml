@@ -3,9 +3,9 @@
 <package format="3">
   <name>depth</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>RTAB-Map depth-camera mapping, Nav2 navigation and frontier exploration for a rover in Gazebo and a real RealSense D435i</description>
   <maintainer email="soham@todo.todo">soham</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
 
   <exec_depend>rtabmap_launch</exec_depend>
   <exec_depend>rtabmap_util</exec_depend>

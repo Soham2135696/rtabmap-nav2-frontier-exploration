@@ -1,0 +1,9 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Word documentation (kept locally, not in the repository)
+*.docx
+# LibreOffice / Word lock files while a document is open
+.~lock.*#
+~$*

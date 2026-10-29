@@ -1,0 +1,71 @@
+# ros2_control for urdf/quadruped.urdf (legs only). rover.urdf uses controllers.yaml.
+#
+# The legs carry the robot here, so the joints take effort (torque) and Gazebo simulates
+# them physically. Position control (as in controllers.yaml) teleports the joints every
+# step, which made the model explode on ground contact; this plugin version's
+# position_pid interface cannot be claimed by a controller. Chain instead:
+#   /joint_group_controller/commands (12 rad, same topic and order as controllers.yaml)
+#   -> joint_group_controller -> pid_controller -> joint effort
+controller_manager:
+  ros__parameters:
+    update_rate: 500
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    pid_controller:
+      type: pid_controller/PidController
+
+    joint_group_controller:
+      type: forward_command_controller/ForwardCommandController
+
+
+pid_controller:
+  ros__parameters:
+    dof_names:
+      - CCUP1
+      - THIGH1
+      - FOOT1
+      - CCUP2
+      - THIGH2
+      - FOOT2
+      - CCUP3
+      - THIGH3
+      - FOOT3
+      - CCUP4
+      - THIGH4
+      - FOOT4
+    command_interface: effort
+    reference_and_state_interfaces: ["position"]
+    gains:
+      CCUP1: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      THIGH1: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      FOOT1: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      CCUP2: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      THIGH2: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      FOOT2: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      CCUP3: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      THIGH3: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      FOOT3: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      CCUP4: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      THIGH4: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+      FOOT4: {p: 30.0, i: 0.0, d: 0.5, i_clamp_max: 1.0, i_clamp_min: -1.0, antiwindup: true}
+
+
+# Writes the 12 targets into pid_controller (chained reference interfaces)
+joint_group_controller:
+  ros__parameters:
+    interface_name: position
+    joints:
+      - pid_controller/CCUP1
+      - pid_controller/THIGH1
+      - pid_controller/FOOT1
+      - pid_controller/CCUP2
+      - pid_controller/THIGH2
+      - pid_controller/FOOT2
+      - pid_controller/CCUP3
+      - pid_controller/THIGH3
+      - pid_controller/FOOT3
+      - pid_controller/CCUP4
+      - pid_controller/THIGH4
+      - pid_controller/FOOT4

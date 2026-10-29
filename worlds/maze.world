@@ -1,0 +1,226 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="maze_world">
+
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <!-- ===== OUTER BOUNDARY (10m x 10m, walls at ±5m) ===== -->
+
+    <model name="wall_south">
+      <static>true</static>
+      <pose>0 -5 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>10.3 0.15 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>10.3 0.15 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Grey</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_north">
+      <static>true</static>
+      <pose>0 5 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>10.3 0.15 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>10.3 0.15 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Grey</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_west">
+      <static>true</static>
+      <pose>-5 0 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.15 10.3 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 10.3 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Grey</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_east">
+      <static>true</static>
+      <pose>5 0 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.15 10.3 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 10.3 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Grey</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ===== INTERNAL MAZE WALLS =====
+         5x5 grid of 2m cells (col/row boundaries at -3,-1,1,3).
+         Bot spawns at (-4,-4) = bottom-left cell.
+
+         Corridor layout (each cell 2m x 2m, corridors 2m wide):
+           Row 4: open left-right (full row)
+                         ^ gap col4 only
+           Row 3: open left-right, (0,3) dead-end via (0,2)
+                  ^ gap col0     ^ gap col3  ^ gap col4
+           Row 2: left half (0,2)-(1,2), right half (2,2)-(3,2), col4 pass-through
+           Row 1: left cluster (0,1)-(1,1)-(2,1), right (3,1)-(4,1)
+                         ^ gap col0 only up     ^ gap col4 only up
+           Row 0: open left-right (full row)
+                                                ^ gap col4 up
+    -->
+
+    <!-- H1: y=-3, x=-5 to x=3  (blocks row0-row1 in cols 0-3, gap at col4) -->
+    <model name="wall_h1">
+      <static>true</static>
+      <pose>-1 -3 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.15 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.15 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Wood</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- H2: y=-1, x=-3 to x=3  (blocks row1-row2 in cols 1-3, gaps at col0 and col4) -->
+    <model name="wall_h2">
+      <static>true</static>
+      <pose>0 -1 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>6 0.15 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>6 0.15 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Wood</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- H3: y=1, x=-3 to x=1  (blocks row2-row3 in cols 1-2; gaps at col0, col3, col4) -->
+    <model name="wall_h3">
+      <static>true</static>
+      <pose>-1 1 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>4 0.15 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>4 0.15 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Wood</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- H4: y=3, x=-5 to x=3  (blocks row3-row4 in cols 0-3, gap at col4) -->
+    <model name="wall_h4">
+      <static>true</static>
+      <pose>-1 3 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>8 0.15 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>8 0.15 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Wood</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- V1: x=3, y=-1 to y=1  (blocks col3-col4 in row2) -->
+    <model name="wall_v1">
+      <static>true</static>
+      <pose>3 0 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.15 2 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 2 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Bricks</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- V2: x=1, y=-3 to y=-1  (blocks col2-col3 in row1, splits row1 into left/right clusters) -->
+    <model name="wall_v2">
+      <static>true</static>
+      <pose>1 -2 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.15 2 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 2 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Bricks</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- V3: x=-1, y=-1 to y=1  (blocks col1-col2 in row2, creates dead-end at (1,2)) -->
+    <model name="wall_v3">
+      <static>true</static>
+      <pose>-1 0 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.15 2 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 2 1.2</size></box></geometry>
+          <material><script>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+            <name>Gazebo/Bricks</name>
+          </script></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

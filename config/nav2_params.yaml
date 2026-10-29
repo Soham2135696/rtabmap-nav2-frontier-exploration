@@ -1,0 +1,225 @@
+planner_server:
+  ros__parameters:
+    use_sim_time: true
+
+    # Nav2 defaults, written out so allow_unknown is explicit: frontier
+    # exploration goals sit next to unknown space
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      use_astar: false
+      allow_unknown: true
+
+controller_server:
+  ros__parameters:
+    use_sim_time: true
+
+    controller_frequency: 10.0
+
+    controller_plugins: ["FollowPath"]
+
+    # Default allowance (0.5 m in 10 s) aborts goals behind the rover: a 180 deg
+    # in-place turn at 0.5 rad/s (~80% with wheel slip) takes ~8 s and turning
+    # does not count as progress, then 0.5 m at 0.15 m/s takes another ~4 s
+    progress_checker_plugin: "progress_checker"
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5
+      movement_time_allowance: 20.0
+
+    goal_checker_plugins: ["general_goal_checker"]
+    general_goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      stateful: true
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.25
+
+    FollowPath:
+         plugin: "dwb_core::DWBLocalPlanner"
+
+         min_vel_x: 0.0
+         max_vel_x: 0.15
+
+         max_vel_theta: 0.5
+
+         min_speed_xy: 0.0
+         max_speed_xy: 0.15
+         min_speed_theta: 0.0
+
+         acc_lim_x: 1.0
+         acc_lim_y: 0.0
+         acc_lim_theta: 1.5
+
+         decel_lim_x: -1.5
+         decel_lim_y: 0.0
+         decel_lim_theta: -2.0
+
+         vx_samples: 20
+         vy_samples: 1
+         vtheta_samples: 20
+
+         sim_time: 1.7
+
+         xy_goal_tolerance: 0.25
+         trans_stopped_velocity: 0.1
+
+         short_circuit_trajectory_evaluation: true
+         stateful: true
+
+         critics:
+             - RotateToGoal
+             - Oscillation
+             - BaseObstacle
+             - GoalAlign
+             - PathAlign
+             - PathDist
+             - GoalDist
+
+         BaseObstacle.scale: 2.0
+         PathAlign.scale: 32.0
+         PathDist.scale: 32.0
+         GoalAlign.scale: 24.0
+         GoalDist.scale: 24.0
+         RotateToGoal.scale: 32.0
+
+behavior_server:
+  ros__parameters:
+    use_sim_time: true
+    # Default 0.1 s: Gazebo TF arrives ~60 ms late, so the footprint lookup failed
+    # and every spin aborted with "Collision Ahead". Same tolerance as the costmaps
+    transform_tolerance: 0.5
+    # Spin (recoveries and frontier_explorer's 360 deg look-around) publishes
+    # /cmd_vel directly, bypassing DWB and velocity_smoother. Nav2 defaults are
+    # 1.0 rad/s and 3.2 rad/s^2; keep it within the DWB limits below
+    max_rotational_vel: 0.5     # = FollowPath.max_vel_theta
+    min_rotational_vel: 0.4     # Nav2 default, below the max
+    rotational_acc_lim: 1.5     # = FollowPath.acc_lim_theta
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: true
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: true
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: true
+    # Hard cap matching DWB limits (Nav2 defaults are 0.5 m/s, 2.0 rad/s)
+    max_velocity: [0.15, 0.0, 0.5]
+    min_velocity: [-0.15, 0.0, -0.5]
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: true
+
+      global_frame: map
+      robot_base_frame: base_link
+
+      update_frequency: 2.0
+      publish_frequency: 2.0
+      # Publish the whole costmap every time, not only costmap_updates:
+      # frontier_explorer reads /global_costmap/costmap to check goal costs
+      always_send_full_costmap: true
+
+      resolution: 0.05
+
+      track_unknown_space: true
+      rolling_window: false
+
+      plugins:
+        - static_layer
+        - obstacle_layer
+        - inflation_layer
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_topic: /rtabmap/map
+        subscribe_to_updates: true
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        observation_sources: depth_cloud
+
+        tf_filter_tolerance: 0.5
+
+        # Depth camera point cloud used directly (no pointcloud_to_laserscan).
+        # Heights are filtered in this costmap's global frame, not base_link,
+        # so the window must exclude the floor. 0.1-0.7 m drops the floor and
+        # keeps the 1.2 m maze walls.
+        depth_cloud:
+          topic: /camera/camera/points
+          data_type: PointCloud2
+          marking: true
+          clearing: true
+          obstacle_max_range: 3.0
+          raytrace_max_range: 4.0
+          obstacle_min_range: 0.1
+          raytrace_min_range: 0.1
+          min_obstacle_height: 0.1
+          max_obstacle_height: 0.7
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        inflation_radius: 0.55
+        cost_scaling_factor: 2.0
+
+      # Measured from rover.urdf: x -0.26..+0.21 (rear feet, front camera), y +-0.18
+      footprint: "[[0.23, 0.19], [0.23, -0.19], [-0.27, -0.19], [-0.27, 0.19]]"
+      footprint_padding: 0.02
+
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: true
+
+      global_frame: odom
+      robot_base_frame: base_link
+
+      update_frequency: 5.0
+      publish_frequency: 5.0
+
+      rolling_window: true
+      width: 5
+      height: 5
+      resolution: 0.05
+
+      transform_tolerance: 0.5
+
+      plugins:
+        - obstacle_layer
+        - inflation_layer
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        observation_sources: depth_cloud
+
+        tf_filter_tolerance: 0.5
+
+        # Depth camera point cloud used directly (no pointcloud_to_laserscan).
+        # Heights are filtered in this costmap's global frame, not base_link,
+        # so the window must exclude the floor. 0.1-0.7 m drops the floor and
+        # keeps the 1.2 m maze walls.
+        depth_cloud:
+          topic: /camera/camera/points
+          data_type: PointCloud2
+          marking: true
+          clearing: true
+          obstacle_max_range: 3.0
+          raytrace_max_range: 4.0
+          obstacle_min_range: 0.1
+          raytrace_min_range: 0.1
+          min_obstacle_height: 0.1
+          max_obstacle_height: 0.7
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        inflation_radius: 0.55
+        cost_scaling_factor: 2.0
+
+      # Measured from rover.urdf: x -0.26..+0.21 (rear feet, front camera), y +-0.18
+      footprint: "[[0.23, 0.19], [0.23, -0.19], [-0.27, -0.19], [-0.27, 0.19]]"
+      footprint_padding: 0.02

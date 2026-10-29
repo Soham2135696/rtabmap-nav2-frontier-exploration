@@ -1,0 +1,26 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    joint_group_controller:
+      type: position_controllers/JointGroupPositionController
+
+
+joint_group_controller:
+  ros__parameters:
+    joints:
+      - CCUP1
+      - THIGH1
+      - FOOT1
+      - CCUP2
+      - THIGH2
+      - FOOT2
+      - CCUP3
+      - THIGH3
+      - FOOT3
+      - CCUP4
+      - THIGH4
+      - FOOT4

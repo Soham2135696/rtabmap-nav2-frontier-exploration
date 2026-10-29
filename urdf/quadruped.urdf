@@ -1,0 +1,619 @@
+<?xml version="1.0"?>
+<!-- Legs-only model of the real quadruped, for ros2 launch depth 2_gazebo.launch.py robot:=quadruped.
+     Derived from rover.urdf with the same body, legs, camera and IMU, but without the wheeled
+     base (wheels, castors, lidar, diff_drive). Other differences -
+     - base_link is the body centre, 0.19 m above base_footprint (walk_gait stand pose);
+       legs 1 / 2 and the camera at +x, the direction walk_gait crawls
+     - joints take effort from pid_controller (config/controllers_quadruped.yaml)
+     - feet have full grip; odometry comes from the p3d ground-truth plugin
+     Keep joint names and order in step with rover.urdf and controllers_quadruped.yaml -->
+<robot name="quadruped">
+  <link name="base_footprint" />
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_link" />
+    <origin xyz="0 0 0.19" rpy="0 0 0" />
+  </joint>
+  <link name="base_link">
+    <inertial>
+      <mass value="0.1" />
+      <inertia ixx="0.0001" ixy="0.0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001" />
+    </inertial>
+  </link>
+  <link name="camera">
+    <inertial>
+      <mass value="0.5" />
+      <inertia ixx="0.01" ixy="0.0" ixz="0" iyy="0.01" iyz="0" izz="0.01" />
+    </inertial>
+    <visual>
+      <geometry>
+        <box size="0.025 0.09 0.025" />
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.025 0.09 0.025" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <origin xyz="0.2 0 0.1" rpy="0 0.0 0.0" />
+    <parent link="base_link" />
+    <child link="camera" />
+    <axis xyz="0.0 0.0 1.0" />
+  </joint>
+  <link name="camera_link_optical" />
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera" />
+    <child link="camera_link_optical" />
+    <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708" />
+  </joint>
+  <link name="imu_link">
+    <inertial>
+      <mass value="0.1" />
+      <inertia ixx="1e-5" ixy="0.0" ixz="0.0" iyy="1e-5" iyz="0.0" izz="1e-5" />
+    </inertial>
+  </link>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="imu_link" />
+    <origin xyz="0 0 0.05" rpy="0 0 0" />
+  </joint>
+  <link name="body-v1">
+    <inertial>
+      <origin xyz="0.0 0.05999999999999999 0.0" rpy="0.0 0.0 0.0" />
+      <mass value="2.543399999999999" />
+      <inertia ixx="0.04768874999999999" iyy="0.2079229499999999" izz="0.2212757999999999" ixy="0.0" iyz="0.0" ixz="-4.5693013817071915e-17" />
+    </inertial>
+    <visual name="body-v1_visual">
+      <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/body-v1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="body-v1_collision">
+      <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/body-v1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg11">
+    <inertial>
+      <origin xyz="0.004640688291708157 -0.024999999992400834 -0.050000000000000176" rpy="0.0 -0.0 0.0" />
+      <mass value="0.3431769931450156" />
+      <inertia ixx="0.0003989895652956642" iyy="0.0003249665351096496" izz="7.965403510965137e-05" ixy="-3.198396408832238e-16" iyz="5.421010862427522e-19" ixz="2.168404344971009e-19" />
+    </inertial>
+    <visual name="leg11_visual">
+      <origin xyz="0.010000000000000026 -0.12499999999999946 1.0658141036401502e-15" rpy="-1.5707963267948957 1.5707963267948966 0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg11.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg11_collision">
+      <origin xyz="0.010000000000000026 -0.12499999999999946 1.0658141036401502e-15" rpy="-1.5707963267948957 1.5707963267948966 0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg11.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg21">
+    <inertial>
+      <origin xyz="0.00464068829170813 0.02499999999240073 -0.04999999999999989" rpy="0.0 -0.0 0.0" />
+      <mass value="0.3431769931450156" />
+      <inertia ixx="0.0003989895652956373" iyy="0.000324966535109634" izz="7.965403510970005e-05" ixy="3.183217578417441e-16" iyz="0.0" ixz="0.0" />
+    </inertial>
+    <visual name="leg21_visual">
+      <origin xyz="0.009999999999999955 0.12499999999999865 -0.10000000000000114" rpy="1.5707963267948972 -1.5707963267948966 0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg21.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg21_collision">
+      <origin xyz="0.009999999999999955 0.12499999999999865 -0.10000000000000114" rpy="1.5707963267948972 -1.5707963267948966 0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg21.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg31">
+    <inertial>
+      <origin xyz="0.004640688291708166 0.024999999992400816 0.050000000000000266" rpy="0.0 -0.0 0.0" />
+      <mass value="0.3431769931450156" />
+      <inertia ixx="0.00039898956529563386" iyy="0.0003249665351096418" izz="7.965403510967837e-05" ixy="3.191891195797325e-16" iyz="1.734723475976807e-18" ixz="0.0" />
+    </inertial>
+    <visual name="leg31_visual">
+      <origin xyz="0.01 0.12499999999999904 -9.769962616701378e-16" rpy="1.5707963267948972 -1.5707963267948966 0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg31.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg31_collision">
+      <origin xyz="0.01 0.12499999999999904 -9.769962616701378e-16" rpy="1.5707963267948972 -1.5707963267948966 0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg31.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg41">
+    <inertial>
+      <origin xyz="0.0046406882917081485 -0.024999999992400834 0.04999999999999986" rpy="0.0 -0.0 0.0" />
+      <mass value="0.3431769931450156" />
+      <inertia ixx="0.0003989895652956174" iyy="0.0003249665351096505" izz="7.965403510966265e-05" ixy="-3.1490652099841476e-16" iyz="4.228388472693467e-18" ixz="2.168404344971009e-18" />
+    </inertial>
+    <visual name="leg41_visual">
+      <origin xyz="0.009999999999999983 -0.12499999999999922 0.10000000000000103" rpy="-1.5707963267948968 1.5707963267948963 0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg41.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg41_collision">
+      <origin xyz="0.009999999999999983 -0.12499999999999922 0.10000000000000103" rpy="-1.5707963267948968 1.5707963267948963 0" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg41.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg22">
+    <inertial>
+      <origin xyz="-3.953638998822839e-05 -0.0049999999999996445 0.05233321699365142" rpy="0.0 -0.0 0.0" />
+      <mass value="0.29729112047244616" />
+      <inertia ixx="0.0002624683617283019" iyy="0.000318455693006741" izz="6.094218328625209e-05" ixy="1.0408340855860843e-17" iyz="6.938893903907228e-18" ixz="1.5224735508282197e-07" />
+    </inertial>
+    <visual name="leg22_visual">
+      <origin xyz="0.06746885692236804 -0.009999999999999681 -0.08521412908476197" rpy="3.141592653589793 0.8813912722571406 -3.2581808205583e-17" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg22.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg22_collision">
+      <origin xyz="0.06746885692236804 -0.009999999999999681 -0.08521412908476197" rpy="3.141592653589793 0.8813912722571406 -3.2581808205583e-17" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg22.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg42">
+    <inertial>
+      <origin xyz="-0.0004962225604029235 0.0049999999999998405 0.05233087928939606" rpy="0.0 -0.0 0.0" />
+      <mass value="0.29729112047244616" />
+      <inertia ixx="0.0002624503579390998" iyy="0.00031845569300658055" izz="6.096018707549668e-05" ixy="-1.496198998029996e-17" iyz="-7.15573433840433e-18" ixz="1.9107825540223833e-06" />
+    </inertial>
+    <visual name="leg42_visual">
+      <origin xyz="0.06820991203745486 -1.509903313490213e-16 -0.08462211501687023" rpy="-3.141592653589793 0.8726646259971661 -1.2216457712746539e-15" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg42.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg42_collision">
+      <origin xyz="0.06820991203745486 -1.509903313490213e-16 -0.08462211501687023" rpy="-3.141592653589793 0.8726646259971661 -1.2216457712746539e-15" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg42.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg32">
+    <inertial>
+      <origin xyz="-3.953638998835274e-05 -0.004999999999999751 0.05233321699365133" rpy="0.0 -0.0 5.254433630532253e-65" />
+      <mass value="0.29729112047244616" />
+      <inertia ixx="0.0002624683617283574" iyy="0.0003184556930067141" izz="6.0942183286220863e-05" ixy="8.673617379884035e-18" iyz="1.962634736391093e-36" ixz="1.5224735506243897e-07" />
+    </inertial>
+    <visual name="leg32_visual">
+      <origin xyz="0.06746885692236827 -0.009999999999999645 -0.08521412908476204" rpy="3.141592653589793 0.8813912722571384 9.750746281696297e-16" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg32.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg32_collision">
+      <origin xyz="0.06746885692236827 -0.009999999999999645 -0.08521412908476204" rpy="3.141592653589793 0.8813912722571384 9.750746281696297e-16" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg32.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg12">
+    <inertial>
+      <origin xyz="-3.953638998826392e-05 0.004999999999999876 0.05233321699365165" rpy="0.0 -0.0 7.066652401649365e-100" />
+      <mass value="0.29729112047244616" />
+      <inertia ixx="0.000262468361728432" iyy="0.0003184556930067089" izz="6.09421832861866e-05" ixy="-5.204170427930421e-18" iyz="-1.5395670849294163e-17" ixz="1.5224735503858652e-07" />
+    </inertial>
+    <visual name="leg12_visual">
+      <origin xyz="0.06746885692236938 1.2434497875801754e-16 -0.08521412908476282" rpy="-3.141592653589793 0.8813912722571356 1.9732686657267366e-15" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg12.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg12_collision">
+      <origin xyz="0.06746885692236938 1.2434497875801754e-16 -0.08521412908476282" rpy="-3.141592653589793 0.8813912722571356 1.9732686657267366e-15" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg12.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg23">
+    <inertial>
+      <origin xyz="0.06749999709221571 3.811660054253707e-09 0.0049999999999996445" rpy="0.0 -0.0 0.0" />
+      <mass value="0.4044443369036279" />
+      <inertia ixx="7.991711651511232e-05" iyy="0.0005545956109067156" izz="0.000627771988473977" ixy="6.808789643208968e-17" iyz="-2.775557561562891e-17" ixz="-6.505213034913026e-18" />
+    </inertial>
+    <visual name="leg23_visual">
+      <origin xyz="0.1999999970922196 0.05000000381166029 -7.460698725481052e-16" rpy="1.570796326794896 -3.059452157957313e-15 -1.5707963267949008" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg23.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg23_collision">
+      <origin xyz="0.1999999970922196 0.05000000381166029 -7.460698725481052e-16" rpy="1.570796326794896 -3.059452157957313e-15 -1.5707963267949008" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg23.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg43">
+    <inertial>
+      <origin xyz="0.06750000475292221 -1.5979596312831746e-09 -0.004999999999999716" rpy="0.0 -0.0 0.0" />
+      <mass value="0.4044443369036279" />
+      <inertia ixx="7.991711651509324e-05" iyy="0.0005545956109071493" izz="0.0006277719884738124" ixy="3.469446951953614e-18" iyz="2.5587171270657905e-17" ixz="-5.204170427930421e-18" />
+    </inertial>
+    <visual name="leg43_visual">
+      <origin xyz="0.2000000047529225 0.04999999840204005 -0.009999999999999565" rpy="1.5707963267948963 3.0016209373128888e-15 -1.570796326794898" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg43.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg43_collision">
+      <origin xyz="0.2000000047529225 0.04999999840204005 -0.009999999999999565" rpy="1.5707963267948963 3.0016209373128888e-15 -1.570796326794898" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg43.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg13">
+    <inertial>
+      <origin xyz="0.06749999709221402 3.811660587160759e-09 -0.004999999999999983" rpy="0.0 4.861730685829017e-63 0.0" />
+      <mass value="0.4044443369036279" />
+      <inertia ixx="7.991711651507069e-05" iyy="0.0005545956109072841" izz="0.0006277719884738352" ixy="6.6957035197216955e-18" iyz="1.7347234759768065e-18" ixz="-2.0274580625478936e-17" />
+    </inertial>
+    <visual name="leg13_visual">
+      <origin xyz="0.1999999970922145 0.05000000381166109 -0.010000000000000285" rpy="1.5707963267948941 3.2691822140277413e-16 -1.5707963267948961" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg13.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg13_collision">
+      <origin xyz="0.1999999970922145 0.05000000381166109 -0.010000000000000285" rpy="1.5707963267948941 3.2691822140277413e-16 -1.5707963267948961" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg13.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="leg33">
+    <inertial>
+      <origin xyz="0.06749999709221438 3.811661990482662e-09 0.005000000000000817" rpy="0.0 -3.421138828918009e-48 0.0" />
+      <mass value="0.4044443369036279" />
+      <inertia ixx="7.991711651492844e-05" iyy="0.0005545956109067017" izz="0.0006277719884735346" ixy="3.122810119166545e-16" iyz="2.2551405187698486e-17" ixz="1.1102230246251563e-16" />
+    </inertial>
+    <visual name="leg33_visual">
+      <origin xyz="0.19999999709221558 0.05000000381166603 2.877698079828406e-15" rpy="1.5707963267949112 2.5069503642851463e-15 -1.5707963267948986" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg33.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </visual>
+    <collision name="leg33_collision">
+      <origin xyz="0.19999999709221558 0.05000000381166603 2.877698079828406e-15" rpy="1.5707963267949112 2.5069503642851463e-15 -1.5707963267948986" />
+      <geometry>
+        <mesh filename="package://depth/meshes/leg33.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="botbase" type="fixed">
+    <parent link="base_link" />
+    <child link="body-v1" />
+    <origin xyz="0 0.06 0" rpy="0 0 3.14159" />
+  </joint>
+  <joint name="CCUP1" type="revolute">
+    <origin xyz="-0.15 0.0 -0.045" rpy="-0.0 -1.5707963267948966 0" />
+    <parent link="body-v1" />
+    <child link="leg11" />
+    <axis xyz="0.0 0.0 1.0" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="CCUP4" type="revolute">
+    <origin xyz="0.15 0.0 -0.045" rpy="-0.0 -1.5707963267948966 0" />
+    <parent link="body-v1" />
+    <child link="leg41" />
+    <axis xyz="0.0 0.0 1.0" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="CCUP3" type="revolute">
+    <origin xyz="0.15 0.12 -0.045" rpy="-0.0 -1.5707963267948966 0" />
+    <parent link="body-v1" />
+    <child link="leg31" />
+    <axis xyz="0.0 0.0 1.0" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="CCUP2" type="revolute">
+    <origin xyz="-0.15 0.12 -0.045" rpy="-0.0 -1.5707963267948966 0" />
+    <parent link="body-v1" />
+    <child link="leg21" />
+    <axis xyz="0.0 0.0 1.0" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="FOOT4" type="revolute">
+    <origin xyz="-0.000992449999999998 0.01 0.10466176" rpy="1.5707963267948966 -4.7302613557769027e-32 -1.9721522630525295e-31" />
+    <parent link="leg42" />
+    <child link="leg43" />
+    <axis xyz="1.9721522630525295e-31 9.860761315262648e-32 1.0" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="FOOT1" type="revolute">
+    <origin xyz="-7.906999999999443e-05 0.01 0.10466642999999999" rpy="1.5707963267948966 5.551115123125783e-17 1.976004122941304e-31" />
+    <parent link="leg12" />
+    <child link="leg13" />
+    <axis xyz="-1.9721522630525295e-31 3.944304526105059e-31 1.0000000000000002" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="FOOT2" type="revolute">
+    <origin xyz="-7.906999999999443e-05 -0.01 0.10466642999999999" rpy="1.5707963267948966 -5.010913000762207e-33 0.0" />
+    <parent link="leg22" />
+    <child link="leg23" />
+    <axis xyz="0.0 2.9582283945787943e-31 0.9999999999999999" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="FOOT3" type="revolute">
+    <origin xyz="-7.906999999999443e-05 -0.01 0.10466642999999999" rpy="1.5707963267948966 -5.551115123125784e-17 -3.659266894335748e-32" />
+    <parent link="leg32" />
+    <child link="leg33" />
+    <axis xyz="3.697785493223493e-32 1.355854680848614e-31 0.9999999999999998" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="THIGH1" type="revolute">
+    <origin xyz="0.005 -0.05 -0.05" rpy="-3.141592653589793 1.5707963267948966 0" />
+    <parent link="leg11" />
+    <child link="leg12" />
+    <axis xyz="-3.851859888774472e-34 1.0 0.0" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="THIGH4" type="revolute">
+    <origin xyz="0.005 -0.05 0.05" rpy="-3.141592653589793 1.5707963267948966 0" />
+    <parent link="leg41" />
+    <child link="leg42" />
+    <axis xyz="0.0 1.0 0.0" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="THIGH2" type="revolute">
+    <origin xyz="0.005 0.05 -0.05" rpy="-3.141592653589793 1.5707963267948966 0" />
+    <parent link="leg21" />
+    <child link="leg22" />
+    <axis xyz="0.0 -1.0 0.0" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <joint name="THIGH3" type="revolute">
+    <origin xyz="0.005 0.05 0.05" rpy="3.141592653589793 1.5707963267948966 0" />
+    <parent link="leg31" />
+    <child link="leg32" />
+    <axis xyz="3.851859888774472e-34 -1.0 -6.162975822039155e-33" />
+    <dynamics damping="0.2" friction="0.0" />
+    <limit lower="-3.14" upper="3.14" effort="50" velocity="5" />
+  </joint>
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <!-- Leg 1 -->
+    <joint name="CCUP1">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="THIGH1">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">-1.4002</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="FOOT1">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">-0.46137</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <!-- Leg 2 -->
+    <joint name="CCUP2">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="THIGH2">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">1.4002</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="FOOT2">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">-0.46137</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <!-- Leg 3 -->
+    <joint name="CCUP3">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="THIGH3">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">1.4002</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="FOOT3">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">-0.46137</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <!-- Leg 4 -->
+    <joint name="CCUP4">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="THIGH4">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">-1.4002</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="FOOT4">
+      <command_interface name="effort" />
+      <state_interface name="position">
+        <param name="initial_value">-0.46137</param>
+      </state_interface>
+      <state_interface name="velocity" />
+    </joint>
+  </ros2_control>
+  <gazebo>
+    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <!-- DEPTH_SHARE_DIR is replaced with the package share path by the launch files -->
+      <parameters>DEPTH_SHARE_DIR/config/controllers_quadruped.yaml</parameters>
+    </plugin>
+  </gazebo>
+  <!-- Feet get full grip -->
+  <gazebo reference="leg13">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+  </gazebo>
+  <gazebo reference="leg23">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+  </gazebo>
+  <gazebo reference="leg33">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+  </gazebo>
+  <gazebo reference="leg43">
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+  </gazebo>
+  <!-- Ground-truth pose of the body (replaces the diff_drive odometry). ground_truth_odom turns it into /odom and TF odom to base_footprint -->
+  <gazebo>
+    <plugin name="ground_truth" filename="libgazebo_ros_p3d.so">
+      <ros>
+        <remapping>odom:=ground_truth</remapping>
+      </ros>
+      <body_name>base_footprint</body_name>
+      <frame_name>world</frame_name>
+      <update_rate>50</update_rate>
+    </plugin>
+  </gazebo>
+  <gazebo reference="camera">
+    <sensor name="camera" type="depth">
+      <update_rate>30</update_rate>
+      <camera>
+        <horizontal_fov>1.047</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>10.0</far>
+        </clip>
+      </camera>
+      <plugin name="gazebo_ros_camera" filename="libgazebo_ros_camera.so">
+        <ros>
+          <namespace>/camera</namespace>
+        </ros>
+        <camera_name>camera</camera_name>
+        <frame_name>camera_link_optical</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <!-- IMU -->
+  <gazebo reference="imu_link">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+      <imu>
+        <angular_velocity>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </z>
+        </linear_acceleration>
+      </imu>
+      <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+        <ros>
+          <namespace>/imu</namespace>
+        </ros>
+        <frame_name>imu_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+</robot>

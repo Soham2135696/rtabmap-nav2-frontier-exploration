@@ -1,0 +1,504 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.7">
+    <model name="urdf">
+        <link name="body-v1">
+            <pose>0.0 0.0 0.0 0.0 -0.0 0.0</pose>
+            <inertial>
+                <mass>25.43399999999999</mass>
+                <pose>0.0 0.05999999999999999 0.0 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.04768874999999999</ixx>
+                    <iyy>0.2079229499999999</iyy>
+                    <izz>0.2212757999999999</izz>
+                    <ixy>0.0</ixy>
+                    <iyz>0.0</iyz>
+                    <ixz>-4.5693013817071915e-17</ixz>
+                </inertia>
+            </inertial>
+            <visual name="body-v1_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/body-v1.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="body-v1_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/body-v1.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg11">
+            <pose>-0.1500000000000011 -0.009999999999999983 -0.1699999999999994 2.0816681711721126e-16 3.969130968762707e-18 4.536737456946797e-17</pose>
+            <inertial>
+                <mass>0.3431769931450156</mass>
+                <pose>0.05000000000000126 0.005359311708291887 0.10000000000759869 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>7.96540351096578e-05</ixx>
+                    <iyy>0.00039898956529564394</iyy>
+                    <izz>0.0003249665351096479</izz>
+                    <ixy>6.792144271889967e-20</ixy>
+                    <iyz>3.170938995765702e-16</iyz>
+                    <ixz>-4.321673473910638e-19</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg11_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg11.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg11_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg11.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg21">
+            <pose>-0.04999999999999888 0.11 0.0799999999999992 -3.1415926535897922 3.937536474703844e-18 -3.141592653589793</pose>
+            <inertial>
+                <mass>0.3431769931450156</mass>
+                <pose>0.05000000000000128 0.005359311708291991 0.10000000000759836 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>7.965403510966885e-05</ixx>
+                    <iyy>0.0003989895652956561</iyy>
+                    <izz>0.0003249665351096417</izz>
+                    <ixy>-1.3960326867410386e-20</ixy>
+                    <iyz>3.217373757965964e-16</iyz>
+                    <ixz>-3.251237911771811e-19</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg21_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg21.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg21_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg21.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg31">
+            <pose>0.15000000000000108 0.11 0.07999999999999932 -3.1415926535897927 4.546710755831542e-18 -3.141592653589793</pose>
+            <inertial>
+                <mass>0.3431769931450156</mass>
+                <pose>0.05000000000000122 0.005359311708291903 0.10000000000759843 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>7.965403510966446e-05</ixx>
+                    <iyy>0.00039898956529564795</iyy>
+                    <izz>0.0003249665351096471</izz>
+                    <ixy>-1.475634825341783e-20</ixy>
+                    <iyz>3.183767182986815e-16</iyz>
+                    <ixz>-7.622478429467316e-19</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg31_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg31.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg31_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg31.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg41">
+            <pose>0.04999999999999906 -0.00999999999999992 -0.16999999999999904 -6.938893903904825e-17 -2.8360662910280453e-17 -3.2416386040549006e-16</pose>
+            <inertial>
+                <mass>0.3431769931450156</mass>
+                <pose>0.05000000000000107 0.005359311708291823 0.10000000000759802 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>7.965403510967213e-05</ixx>
+                    <iyy>0.0003989895652956153</iyy>
+                    <izz>0.00032496653510964463</izz>
+                    <ixy>2.2362547464024776e-18</ixy>
+                    <iyz>3.1567001849037025e-16</iyz>
+                    <ixz>-3.959732349171804e-18</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg41_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg41.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg41_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg41.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg22">
+            <pose>-0.015377884983130356 0.18320991203745413 0.015000000000000227 1.5707963267948946 3.935269254659455e-16 0.6981317007977291</pose>
+            <inertial>
+                <mass>0.29729112047244616</mass>
+                <pose>-0.1490755322857772 -0.004999999999999982 -0.03539973523266595 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.00014232931853963273</ixx>
+                    <iyy>0.00031845569300675575</iyy>
+                    <izz>0.00018108122647494626</izz>
+                    <ixy>-4.426614719371233e-18</ixy>
+                    <iyz>1.7615717357563676e-17</iyz>
+                    <ixz>-9.88827373026704e-05</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg22_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg22.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg22_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg22.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg42">
+            <pose>0.18462211501687015 0.06320991203745457 -0.09499999999999977 1.5707963267948981 -1.4736367939808667e-15 0.6981317007977279</pose>
+            <inertial>
+                <mass>0.29729112047244616</mass>
+                <pose>-0.14907553228577874 -0.004999999999999996 -0.03539973523266602 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.0001423293185396395</ixx>
+                    <iyy>0.0003184556930065931</iyy>
+                    <izz>0.0001810812264749238</izz>
+                    <ixy>8.155503076785907e-18</ixy>
+                    <iyz>-1.7142851538332033e-17</iyz>
+                    <ixz>-9.888273730267901e-05</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg42_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg42.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg42_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg42.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg32">
+            <pose>0.1846221150168701 0.18320991203745454 0.014999999999999918 1.570796326794895 1.1119661350741087e-15 0.6981317007977297</pose>
+            <inertial>
+                <mass>0.29729112047244616</mass>
+                <pose>-0.14907553228577813 -0.004999999999999874 -0.035399735232665194 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.00014232931853965484</ixx>
+                    <iyy>0.0003184556930066804</iyy>
+                    <izz>0.00018108122647492061</izz>
+                    <ixy>-6.601336530486353e-18</ixy>
+                    <iyz>9.34435998303744e-18</iyz>
+                    <ixz>-9.888273730270894e-05</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg32_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg32.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg32_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg32.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg12">
+            <pose>-0.015377884983130141 0.06320991203745485 -0.09500000000000026 1.5707963267948981 1.8888163384851923e-15 0.6981317007977323</pose>
+            <inertial>
+                <mass>0.29729112047244616</mass>
+                <pose>-0.14907553228577872 -0.004999999999999621 -0.035399735232665035 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.00014232931853966395</ixx>
+                    <iyy>0.00031845569300666674</iyy>
+                    <izz>0.00018108122647493365</izz>
+                    <ixy>-1.3456450741332555e-17</ixy>
+                    <iyz>-9.45839357676591e-18</iyz>
+                    <ixz>-9.88827373027263e-05</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg12_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg12.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg12_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg12.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg23">
+            <pose>-0.004661758402033596 0.1640075547529247 0.014999999999999777 1.5707963267948961 -2.678413046908177e-15 -1.5707963267948926</pose>
+            <inertial>
+                <mass>0.4044443369036279</mass>
+                <pose>0.050000000000001606 0.0050000000000005864 0.13250000000000914 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.000554595610906798</ixx>
+                    <iyy>0.0006277719884740165</iyy>
+                    <izz>7.991711651510457e-05</izz>
+                    <ixy>2.904817004359939e-17</ixy>
+                    <iyz>6.877129355985174e-18</iyz>
+                    <ixz>7.425574245437328e-17</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg23_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg23.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg23_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg23.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg43">
+            <pose>0.19533824159796048 0.04400755475292211 -0.11499999999999963 1.5707963267948968 2.706168622523835e-15 -1.5707963267948961</pose>
+            <inertial>
+                <mass>0.4044443369036279</mass>
+                <pose>0.04999999999999945 0.004999999999999872 0.13250000000000028 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.0005545956109071228</ixx>
+                    <iyy>0.0006277719884737786</iyy>
+                    <izz>7.991711651509425e-05</izz>
+                    <ixy>-2.8113570316224225e-17</ixy>
+                    <iyz>6.091605175853616e-18</iyz>
+                    <ixz>4.0042750632829035e-18</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg43_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg43.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg43_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg43.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg13">
+            <pose>-0.00466175840203992 0.04400755475292228 -0.11500000000000053 1.5707963267948932 1.5265566588595878e-16 -1.5707963267948952</pose>
+            <inertial>
+                <mass>0.4044443369036279</mass>
+                <pose>0.05000000000000029 0.005000000000000274 0.13250000000000012 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.0005545956109072442</ixx>
+                    <iyy>0.0006277719884738118</iyy>
+                    <izz>7.991711651507069e-05</izz>
+                    <ixy>2.7527287489142083e-19</ixy>
+                    <iyz>2.1195886755794433e-17</iyz>
+                    <ixz>1.2343636234648654e-17</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg13_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg13.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg13_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg13.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <link name="leg33">
+            <pose>0.195338241597964 0.16400755475292844 0.01500000000000298 1.57079632679491 2.5673907444456863e-15 -1.5707963267948997</pose>
+            <inertial>
+                <mass>0.4044443369036279</mass>
+                <pose>0.05000000000000459 0.004999999999998014 0.13250000000000603 0.0 0.0 0.0</pose>
+                <inertia>
+                    <ixx>0.000554595610906737</ixx>
+                    <iyy>0.0006277719884734733</iyy>
+                    <izz>7.99171165149327e-05</izz>
+                    <ixy>-2.7391321268669884e-17</ixy>
+                    <iyz>-1.2108217736419983e-16</iyz>
+                    <ixz>3.3463723407666356e-16</ixz>
+                </inertia>
+            </inertial>
+            <visual name="leg33_visual">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg33.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </visual>
+            <collision name="leg33_collision">
+                <geometry>
+                    <mesh>
+                        <uri>model://urdf/meshes/leg33.stl</uri>
+                        <scale>0.001 0.001 0.001</scale>
+                    </mesh>
+                </geometry>
+            </collision>
+        </link>
+        <joint name="body-v1_Revolute-1" type="revolute">
+            <pose>1.1101805569997562e-15 0.010000000000000016 0.12499999999999957 0.0 0.0 0.0</pose>
+            <parent>body-v1</parent>
+            <child>leg11</child>
+            <axis>
+                <xyz expressed_in="__model__">-1.0 0.0 0.0</xyz>
+            </axis>
+        </joint>
+        <joint name="body-v1_Revolute-2" type="revolute">
+            <pose>0.10000000000000084 0.009999999999999941 0.12499999999999875 0.0 0.0 0.0</pose>
+            <parent>body-v1</parent>
+            <child>leg41</child>
+            <axis>
+                <xyz expressed_in="__model__">-1.0 0.0 0.0</xyz>
+            </axis>
+        </joint>
+        <joint name="body-v1_Revolute-3" type="revolute">
+            <pose>1.0825160964365595e-15 0.010000000000000054 0.12499999999999935 0.0 0.0 0.0</pose>
+            <parent>body-v1</parent>
+            <child>leg31</child>
+            <axis>
+                <xyz expressed_in="__model__">-1.0 0.0 0.0</xyz>
+            </axis>
+        </joint>
+        <joint name="body-v1_Revolute-4" type="revolute">
+            <pose>0.10000000000000114 0.010000000000000151 0.12499999999999918 0.0 0.0 0.0</pose>
+            <parent>body-v1</parent>
+            <child>leg21</child>
+            <axis>
+                <xyz expressed_in="__model__">-1.0 0.0 0.0</xyz>
+            </axis>
+        </joint>
+        <joint name="leg42_Revolute-9" type="revolute">
+            <pose>0.04999955475292168 0.009999999999999698 0.2000002415979607 0.0 0.0 0.0</pose>
+            <parent>leg42</parent>
+            <child>leg43</child>
+            <axis>
+                <xyz expressed_in="__model__">-0.0 0.0 1.0</xyz>
+            </axis>
+        </joint>
+        <joint name="leg12_Revolute-10" type="revolute">
+            <pose>0.04999955475292204 0.010000000000000288 0.20000024159796026 0.0 0.0 0.0</pose>
+            <parent>leg12</parent>
+            <child>leg13</child>
+            <axis>
+                <xyz expressed_in="__model__">0.0 -0.0 1.0</xyz>
+            </axis>
+        </joint>
+        <joint name="leg22_Revolute-11" type="revolute">
+            <pose>0.049999554752924134 2.855855721337851e-16 0.2000002415979736 0.0 0.0 0.0</pose>
+            <parent>leg22</parent>
+            <child>leg23</child>
+            <axis>
+                <xyz expressed_in="__model__">-0.0 -0.0 1.0</xyz>
+            </axis>
+        </joint>
+        <joint name="leg32_Revolute-12" type="revolute">
+            <pose>0.049999554752928804 -3.025685972573371e-15 0.20000024159796892 0.0 0.0 0.0</pose>
+            <parent>leg32</parent>
+            <child>leg33</child>
+            <axis>
+                <xyz expressed_in="__model__">-0.0 0.0 1.0</xyz>
+            </axis>
+        </joint>
+        <joint name="leg11_Revolute-13" type="revolute">
+            <pose>-0.10866878728913312 2.711123941820995e-16 -0.0021422229563865178 0.0 0.0 0.0</pose>
+            <parent>leg11</parent>
+            <child>leg12</child>
+            <axis>
+                <xyz expressed_in="__model__">0.0 -0.0 -1.0</xyz>
+            </axis>
+        </joint>
+        <joint name="leg41_Revolute-14" type="revolute">
+            <pose>-0.10866878728913307 -1.8776816925091795e-16 -0.0021422229563871284 0.0 0.0 0.0</pose>
+            <parent>leg41</parent>
+            <child>leg42</child>
+            <axis>
+                <xyz expressed_in="__model__">0.0 -0.0 -1.0</xyz>
+            </axis>
+        </joint>
+        <joint name="leg21_Revolute-15" type="revolute">
+            <pose>-0.10866878728913182 -0.010000000000000194 -0.0021422229563874133 0.0 0.0 0.0</pose>
+            <parent>leg21</parent>
+            <child>leg22</child>
+            <axis>
+                <xyz expressed_in="__model__">-0.0 -0.0 1.0</xyz>
+            </axis>
+        </joint>
+        <joint name="leg31_Revolute-16" type="revolute">
+            <pose>-0.10866878728913283 -0.009999999999999905 -0.002142222956386874 0.0 0.0 0.0</pose>
+            <parent>leg31</parent>
+            <child>leg32</child>
+            <axis>
+                <xyz expressed_in="__model__">-0.0 -0.0 1.0</xyz>
+            </axis>
+        </joint>
+    </model>
+</sdf>

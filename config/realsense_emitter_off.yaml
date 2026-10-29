@@ -1,0 +1,6 @@
+# Extra realsense2_camera parameters, passed as rs_launch.py config_file.
+# rs_launch.py only forwards the launch arguments it declares, and
+# emitter_enabled is not one of them, so it has to come from a file.
+# Used by real_sensors.launch.py camera_mode:=stereo emitter:=0: the IR dot
+# pattern moves with the camera and corrupts stereo odometry features.
+depth_module.emitter_enabled: 0

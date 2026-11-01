@@ -46,7 +46,6 @@ setup(
             'walk_gait = depth.walk_gait:main',
             'cal_servo = depth.cal_servo:main',
             'esp = depth.esp:main',
-            'ground_truth_odom = depth.ground_truth_odom:main',
         ],
     },
 )

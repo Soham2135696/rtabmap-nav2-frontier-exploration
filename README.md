@@ -1,6 +1,6 @@
 # depth package: Rover Mapping & Navigation
 
-**Owner:** Soham · **Last updated:** 29 Oct 2026 · ROS 2 Humble · Gazebo Classic · RTAB-Map 0.23 · Nav2
+**Owner:** Soham · **Last updated:** 1 Nov 2026 · ROS 2 Humble · Gazebo Classic · RTAB-Map 0.23 · Nav2
 
 ## Contents
 
@@ -14,7 +14,7 @@
 - [2. Running notes](#2-running-notes)
 - [3. Package layout](#3-package-layout)
 - [4. Robot model (urdf/rover.urdf)](#4-robot-model-urdfroverurdf)
-  - [4.1 Key dimensions](#41-key-dimensions) · [4.2 Links and joints](#42-links-and-joints) · [4.3 Gazebo plugins and sensors](#43-gazebo-plugins-and-sensors) · [4.4 Contact and friction](#44-contact-and-friction)
+  - [4.1 Key dimensions](#41-key-dimensions) · [4.2 Links and joints](#42-links-and-joints) · [4.3 Gazebo plugins and sensors](#43-gazebo-plugins-and-sensors) · [4.4 Contact and friction](#44-contact-and-friction) · [4.5 Quadruped alone](#45-quadruped-alone-urdfquadrupedurdf)
 - [5. System architecture](#5-system-architecture)
   - [5.1 TF tree](#51-tf-tree) · [5.2 Data flow](#52-data-flow) · [5.3 Topics](#53-topics)
 - [6. Mapping configuration (RTAB-Map)](#6-mapping-configuration-rtab-map)
@@ -97,6 +97,8 @@ Start the terminals in this order:
 - Add `gui:=false` to terminal 1 for Gazebo without windows (no RViz).
 - RTAB-Map deletes `~/.ros/rtabmap.db` on every start, so each run maps from scratch.
 
+**Quadruped on its own (no rover):** `ros2 launch depth 2_gazebo.launch.py robot:=quadruped` spawns `urdf/quadruped.urdf` standing on the floor, facing +x. Move the legs with `ros2 run depth walk_gait` in a second terminal: it rises to the stand pose, `f` crawls, `s` stands. RTAB-Map and Nav2 are not set up for it ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)).
+
 ### Real robot: camera mapping + Nav2
 
 One-time setup: install the IMU filter:
@@ -109,7 +111,7 @@ Start the terminals in this order:
 
 | Terminal | Command | Notes |
 | --- | --- | --- |
-| **1. Camera + TF** | `ros2 launch depth real_sensors.launch.py cam_z:=0.4` | Set `cam_*` to the real mount ([section 9.3](#93-real-robot-dimensions)). Lower latency: add `camera_mode:=stereo` here and in terminal 2 ([section 9.2](#92-stereo-ir-mode-lower-latency)) |
+| **1. Camera + TF** | `ros2 launch depth real_sensors.launch.py` | Defaults are the quadruped.urdf mount; override `cam_*` / `base_height` if the real robot differs ([section 9.3](#93-real-robot-dimensions)). Lower latency: add `camera_mode:=stereo` here and in terminal 2 ([section 9.2](#92-stereo-ir-mode-lower-latency)) |
 | **2. RTAB-Map** | `ros2 launch depth rtabmap.launch.py mode:=real` | After the camera stream is up |
 | **3. Nav2** | `ros2 launch depth nav2.launch.py mode:=real` | After `/rtabmap/map` appears. Exploration is off here (`explore:=auto`); `explore:=true` turns it on (untested, see below) |
 | **4. RViz2** | `rviz2 -d /opt/ros/humble/share/nav2_bringup/rviz/nav2_default_view.rviz` | Set the Map display topic to `/rtabmap/map` |
@@ -122,15 +124,15 @@ Start the terminals in this order:
 
 ## 1. Overview
 
-`depth` is a ROS 2 Humble package that simulates a wheeled rover in Gazebo Classic, maps a maze with RTAB-Map using a depth camera, and navigates it autonomously with Nav2. By default a frontier exploration node drives the rover to the edges of the known map until the maze is mapped ([section 7.6](#76-frontier-exploration)); with exploration off, a 2D Goal Pose in RViz drives it through the maze without collisions; map quality is still being tuned (see [section 10](#10-known-issues-and-next-steps)). Mapping and Nav2 also run on a real Intel RealSense D435i depth camera ([section 9](#9-real-robot-d435i-depth-camera)); Nav2 and frontier exploration on the real robot are not tested yet.
+`depth` is a ROS 2 Humble package that simulates a wheeled rover in Gazebo Classic, maps a maze with RTAB-Map using a depth camera, and navigates it autonomously with Nav2. By default a frontier exploration node drives the rover to the edges of the known map until the maze is mapped ([section 7.6](#76-frontier-exploration)); with exploration off, a 2D Goal Pose in RViz drives it through the maze without collisions; map quality is still being tuned (see [section 10](#10-known-issues-and-next-steps)). `robot:=quadruped` spawns the quadruped alone, without the rover, for leg tests ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)). Mapping and Nav2 also run on a real Intel RealSense D435i depth camera ([section 9](#9-real-robot-d435i-depth-camera)); Nav2 and frontier exploration on the real robot are not tested yet.
 
 ### 1.1 At a glance
 
 | Item | Details |
 | --- | --- |
-| **Robot** | Simulation: differential-drive base (2 drive wheels + 2 castors) carrying a 4-legged body (12 position-controlled joints), a depth camera, an IMU and a placeholder lidar link. |
+| **Robot** | Simulation: differential-drive base (2 drive wheels + 2 castors) and an IMU, carrying the quadruped body (4 legs, 12 position-controlled joints) with a depth camera in its front socket. `robot:=quadruped` spawns the quadruped alone ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)) |
 | **World** | `worlds/maze.world`: 10 × 10 m maze, 1.2 m walls, corridors about 1.85 m wide |
-| **Spawn pose** | (-4, -4, 0.15) |
+| **Spawn pose** | (-4, -4), facing +x; z 0.15 (rover) or 0.18 (quadruped alone) |
 | **Mapping** | RTAB-Map 0.23 (built from source in `~/rtabmap_ws`), RGB-D mode, loop closure disabled |
 | **Odometry** | Gazebo ground truth from the diff_drive plugin (`odometry_source 1`) |
 | **Navigation** | Nav2 `navigation_launch.py` (no map_server / AMCL), NavFn (Dijkstra) planner, DWB controller |
@@ -159,7 +161,7 @@ All launch, config, URDF, mesh and world files are installed to `install/depth/s
 | Path | Purpose |
 | --- | --- |
 | **Launch** | |
-| `launch/2_gazebo.launch.py` | Gazebo + maze, robot_state_publisher, RViz, spawns the robot, starts the ros2_control controllers. Fills `DEPTH_SHARE_DIR` and `package://depth` in the URDF. `gui:=false` runs gzserver only |
+| `launch/2_gazebo.launch.py` | Gazebo + maze, robot_state_publisher, RViz, spawns the robot, starts the ros2_control controllers. `robot:=rover` (default) or `robot:=quadruped` (quadruped alone). Fills `DEPTH_SHARE_DIR` and `package://depth` in the URDF. `gui:=false` runs gzserver only |
 | `launch/rtabmap.launch.py` | Includes `rtabmap_launch/rtabmap.launch.py` with topics, frames and RTAB-Map parameters; `mode:=sim` (default) or `mode:=real` |
 | `launch/nav2.launch.py` | Includes Nav2 `navigation_launch.py` with `config/nav2_params.yaml` (sim) or `config/nav2_params_real.yaml` (`mode:=real`), and starts `frontier_explorer` (`explore:=auto`: on in sim, off in real) |
 | `launch/real_sensors.launch.py` | Real robot: D435i driver, Madgwick IMU filter, static TFs, downsampled obstacle cloud |
@@ -168,17 +170,19 @@ All launch, config, URDF, mesh and world files are installed to `install/depth/s
 | `config/nav2_params.yaml` | DWB controller, goal checker, global and local costmaps |
 | `config/nav2_params_real.yaml` | Real-robot copy: no sim time, `/camera/obstacle_cloud`, D435i ranges, slower turns, looser TF tolerances |
 | `config/realsense_emitter_off.yaml` | RealSense `config_file` that turns off the IR emitter (`real_sensors.launch.py camera_mode:=stereo emitter:=0`) |
-| `config/controllers.yaml` | ros2_control at 100 Hz: `joint_state_broadcaster` + `joint_group_controller` (position, 12 leg joints) |
+| `config/controllers.yaml` | ros2_control at 100 Hz: `joint_state_broadcaster` + `joint_group_controller` (position, 12 leg joints, walk_gait's order). Used by both robots |
 | **Model & world** | |
-| `urdf/rover.urdf` | The simulated robot model: wheeled base + legs, sensors, Gazebo plugins, friction |
-| `meshes/*.stl` | Body (`body-v1`) and 12 leg-segment meshes, in millimetres (scaled 0.001) |
+| `urdf/rover.urdf` | Default robot: wheeled base, IMU, diff_drive and friction, with the quadruped body, legs and depth camera mounted on top |
+| `urdf/quadruped.urdf` | The quadruped alone (`robot:=quadruped`): the same body, legs and camera, with PID leg joints and foot contacts ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)) |
+| `meshes/*.stl` | Quadruped body (`base_link.stl`) and legs (`servo_1–4`, `ccup_1–4`, `thigh_1–4`, `foot_1–4`), in millimetres (scaled 0.001) |
 | `worlds/maze.world` | The maze used by `2_gazebo.launch.py` |
 | **Nodes** | |
 | `depth/frontier_explorer.py` | Frontier exploration node (`ros2 run depth frontier_explorer`); parameters have built-in defaults, see [section 7.6](#76-frontier-exploration) |
+| `depth/walk_gait.py` | Leg gait (`ros2 run depth walk_gait`): holds the stand pose, `f` crawls, `s` stands; 12 joint angles on `/joint_group_controller/commands` at 20 Hz, each joint moving at most 1 rad/s ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)) |
 | **Other** | |
 | `depth/__init__.py` | Python package marker |
 | `test/` | Standard ament copyright, flake8 and pep257 tests |
-| Unused | `config/pointcloud_to_laserscan.yaml` (old point cloud → `/scan` conversion), `urdf/urdf.urdf`, `urdf/urdf.sdf`, `urdf/model.config` (old legs-only model), `worlds/A1.world`, `worlds/model.sdf` |
+| Unused | `config/pointcloud_to_laserscan.yaml` (old point cloud → `/scan` conversion), `worlds/A1.world`, `worlds/model.sdf` |
 
 ---
 
@@ -188,14 +192,15 @@ All launch, config, URDF, mesh and world files are installed to `install/depth/s
 
 | Property | Value |
 | --- | --- |
-| **Total mass** | 17.8 kg |
-| **Centre of gravity** | 0.19 m above ground |
+| **Total mass** | 13.6 kg |
+| **Centre of gravity** | 0.14 m above ground |
 | **Forward direction** | +x of `base_link` |
-| **Outline (top view)** | x -0.26 to +0.21 m (rear feet to camera), y ±0.18 m (wheels) |
+| **Outline (top view)** | x -0.20 to +0.33 m (rear castor to front feet), y ±0.19 m (legs) |
 | **base_link** | 0.2 × 0.2 × 0.1 m box, 2 kg, 0.10 m above ground |
 | **Drive wheels** | radius 0.05 m, width 0.06 m, separation 0.30 m |
-| **Camera** | 0.2 m forward, 0.4 m above `base_link`, facing +x |
-| **Legs** | Lowest point 0.23 m above ground at zero pose (do not touch the floor) |
+| **Quadruped body** | 0.3 m above `base_link`, turned -90° so its front faces +x (its CAD front is +y) |
+| **Camera** | In the body's front socket: 0.165 m forward, 0.337 m above `base_link` (0.44 m above ground), facing +x |
+| **Legs** | Lowest point 0.26 m above ground at zero pose (do not touch the floor) |
 
 ### 4.2 Links and joints
 
@@ -204,18 +209,26 @@ All launch, config, URDF, mesh and world files are installed to `install/depth/s
 | `base_footprint_joint` | fixed | base_footprint → base_link | 0 0 0 / 0 0 0 | base_link sits 0.10 m above ground |
 | `wheel_front_left_joint` | continuous | base_link → wheel_front_left | 0 0.15 -0.05 / -1.5708 0 0 | 2 kg; axis +y |
 | `wheel_front_right_joint` | continuous | base_link → wheel_front_right | 0 -0.15 -0.05 / -1.5708 0 0 | Same as left |
-| `castor_wheel_joint` | fixed | base_link → front_castor_wheel | -0.15 0 -0.05 / 1.57 0 0 | Sphere, visual r 0.05, collision r 0.048, 2 kg. Sits at the rear despite its name |
-| `castor_wheel_joint_2` | fixed | base_link → back_castor_wheel | 0.15 0 -0.05 / 1.57 0 0 | Same, at the front |
-| `camera_joint` | fixed | base_link → camera | 0.2 0 0.4 / 0 0 0 | 0.025 × 0.09 × 0.025 m, 0.5 kg |
-| `camera_optical_joint` | fixed | camera → camera_link_optical | 0 0 0 / -1.5708 0 -1.5708 | Optical convention: z forward, x right, y down |
+| `castor_wheel_joint` | fixed | base_link → back_castor_wheel | -0.15 0 -0.05 / 1.57 0 0 | Sphere, visual r 0.05, collision r 0.048, 2 kg; at the rear |
+| `castor_wheel_joint_2` | fixed | base_link → front_castor_wheel | 0.15 0 -0.05 / 1.57 0 0 | Same, at the front |
 | `imu_joint` | fixed | base_link → imu_link | 0 0 0.2 / 0 0 0 | 0.1 kg |
-| `lidar_joint` | fixed | base_link → lidar | 0 0 0.5 / 0 0 1.57 | Frame only, no sensor plugin |
-| `botbase` | fixed | base_link → body-v1 | 0 0.05 0.3 / 0 0 3.14 | Leg body mesh, 2.54 kg |
-| `CCUP1`–`CCUP4` | revolute | body-v1 → legX1 | hip yaw | ±3.14 rad, 50 Nm, 5 rad/s, damping 0.2 |
-| `THIGH1`–`THIGH4` | revolute | legX1 → legX2 | thigh | Same limits |
-| `FOOT1`–`FOOT4` | revolute | legX2 → legX3 | foot | Same limits |
+| `botbase` | fixed | base_link → quad_body | -0.068 -0.068 0.3 / 0 0 -1.5708 | Quadruped body (`base_link.stl`), 1.10 kg. Its CAD origin is a body corner and its front is +y, hence the offset and the -90° turn |
+| `camera_joint` | fixed | quad_body → camera | -0.0679 0.2327 0.0374 / 0 0 1.5708 | In the body's front socket (95.5 × 32 mm opening), front face flush with the plate; 0.025 × 0.09 × 0.025 m, 0.072 kg |
+| `camera_optical_joint` | fixed | camera → camera_link_optical | 0 0 0 / -1.5708 0 -1.5708 | Optical convention: z forward, x right, y down |
+| `base_link_Revolute_1`–`_4` | continuous | quad_body → servo_1–4 | hip | Each servo is fixed to its hip cup (`servo_N_Rigid_*` → `ccup_N`) |
+| `ccup_N_Revolute_*` | continuous | ccup_N → thigh_N | thigh | |
+| `thigh_N_Revolute_*` | continuous | thigh_N → foot_N | foot | No joint limits or damping on any leg joint |
 
-The 12 leg joints are position-controlled through `/joint_group_controller/commands`. Nothing in the mapping and navigation setup commands them; the rover drives on its wheels.
+The 12 leg joints are position-controlled through `/joint_group_controller/commands`, in the order of `config/controllers.yaml` (walk_gait's order):
+
+| Leg | Hip | Thigh | Foot |
+| --- | --- | --- | --- |
+| 1, back right | `base_link_Revolute_1` | `ccup_3_Revolute_31` | `thigh_3_Revolute_32` |
+| 2, back left | `base_link_Revolute_3` | `ccup_2_Revolute_28` | `thigh_2_Revolute_29` |
+| 3, front left | `base_link_Revolute_4` | `ccup_1_Revolute_25` | `thigh_1_Revolute_26` |
+| 4, front right | `base_link_Revolute_2` | `ccup_4_Revolute_34` | `thigh_4_Revolute_35` |
+
+On the rover the legs never touch the floor, and nothing in the mapping and navigation setup commands them; the rover drives on its wheels.
 
 ### 4.3 Gazebo plugins and sensors
 
@@ -223,7 +236,7 @@ The 12 leg joints are position-controlled through `/joint_group_controller/comma
 | --- | --- | --- |
 | **gazebo_ros2_control** | Parameters from `DEPTH_SHARE_DIR/config/controllers.yaml` (path filled by the launch file) | `/controller_manager` services; `/joint_states` via joint_state_broadcaster |
 | **diff_drive** | wheel_separation 0.30, wheel_diameter 0.10, max_wheel_torque 20, max_wheel_acceleration 2.0, odometry_source 1 (ground truth), odometry_frame `odom`, robot_base_frame `base_footprint` | `/odom`, TF odom → base_footprint, wheel TFs; subscribes `/cmd_vel` |
-| **Depth camera** | 30 Hz, 640 × 480, HFOV 1.047 rad (60°), clip 0.05–10 m, namespace `/camera`, frame `camera_link_optical` | `/camera/camera/image_raw`, `…/depth/image_raw`, `…/points`, camera_info |
+| **Depth camera** | In the quadruped's front socket. 30 Hz, 640 × 480, HFOV 1.047 rad (60°), clip 0.05–10 m, namespace `/camera`, frame `camera_link_optical` | `/camera/camera/image_raw`, `…/depth/image_raw`, `…/points`, camera_info |
 | **IMU** | 100 Hz, gaussian noise (gyro 0.0002, accel 0.017), frame `imu_link` | `/imu/data` |
 
 ### 4.4 Contact and friction
@@ -237,7 +250,32 @@ The 12 leg joints are position-controlled through `/joint_group_controller/comma
 > [!WARNING]
 > **URDF rules that break things**
 > - Friction must go in `<gazebo reference>` blocks; URDF `<contact_coefficients>` tags are ignored by Gazebo.
-> - Never put a colon followed by a space anywhere in the URDF, comments included. gazebo_ros2_control passes the URDF as a YAML parameter and the plugins silently fail to load.
+> - Never put a colon followed by a space anywhere in the URDF, comments included. gazebo_ros2_control passes the URDF as a YAML parameter and the plugins silently fail to load: no controllers start, and the legs hang straight down.
+
+### 4.5 Quadruped alone (urdf/quadruped.urdf)
+
+`ros2 launch depth 2_gazebo.launch.py robot:=quadruped` spawns the quadruped without the rover: the same body, legs, camera and joint names as `rover.urdf`, and the same `config/controllers.yaml`. It is for testing the legs; RTAB-Map, Nav2 and exploration are not set up for it.
+
+| Item | Value |
+| --- | --- |
+| **Model** | `urdf/quadruped.urdf`, robot name `quadruped`, 3.48 kg |
+| **Root frame** | `base_link` = body centre (middle of the four hips), x forward, like the rover. The CAD body is `quad_body` under it (`botbase`: yaw -90°, as in rover.urdf) |
+| **Spawn** | (-4, -4, 0.18), facing world +x. The feet are 0.165 m below `base_link` at the zero pose |
+| **Standing height** | `base_link` about 0.163 m above the floor at the zero pose, 0.20 m in walk_gait's stand pose |
+| **Camera** | Same sensor and topics as the rover; (0.167, 0, 0.013) from `base_link` |
+| **Not included** | Wheels, castors, diff_drive, IMU; so no `/odom` and no TF odom → base_link |
+
+Physics settings, only in `quadruped.urdf` (the rover's legs never touch the floor, so it does not need them):
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| **Leg command interface** | `position_pid`, `pos_kp` 20, `pos_kd` 0.5 | Gazebo turns each position command into joint torque, torque = 20 × (target − angle) − 0.5 × speed. Plain `position` teleports the joints every step, and the robot exploded once its feet touched the floor. The controller still uses the position interface, so the topic and `controllers.yaml` are unchanged |
+| **`hold_joints`** | false (gazebo_ros2_control plugin) | Otherwise the joints are locked at zero speed until the controller starts, which threw the robot around when it landed |
+| **Feet** (`foot_1`–`foot_4`) | `mu1 = mu2 = 1.0`, `kp 1e5`, `kd 100`, `minDepth 0.001`, `maxVel 0` | Without them the feet jitter on the floor and the robot slides about 5 mm/s while standing |
+
+**walk_gait** (`depth/walk_gait.py`) publishes the 12 joint angles on `/joint_group_controller/commands` at 20 Hz, in the order of the table in [section 4.2](#42-links-and-joints). It holds the stand pose; type `f` to crawl and `s` to stand again. Each joint command moves at most `max_joint_speed` (1.0 rad/s), starting from the angles of the first `/joint_states` message, so the robot rises to the stand pose in about 1.4 s. Jumping straight to the stand pose made the legs kick and flipped the robot. walk_gait works with both robots; on the rover the legs only swing.
+
+**Test status (simulation):** the quadruped spawns level at the spawn point, stands without drifting (about 2° roll) and no longer flips when walk_gait starts. The crawl stays upright but moves backwards (about 2 cm/s) and turns slowly: walk_gait's inverse kinematics and stand pose were written for the old leg model and are not adapted to the new one yet.
 
 ---
 
@@ -254,18 +292,19 @@ map
         └── base_link                     robot_state_publisher (static, identity); Nav2 robot frame
             ├── wheel_front_left          diff_drive wheel TF (y +0.15, z -0.05, spins)
             ├── wheel_front_right         diff_drive wheel TF (y -0.15, z -0.05, spins)
-            ├── front_castor_wheel        static (x -0.15, sits at the rear)
-            ├── back_castor_wheel         static (x +0.15, sits at the front)
+            ├── back_castor_wheel         static (x -0.15)
+            ├── front_castor_wheel        static (x +0.15)
             ├── imu_link                  static (z 0.2; frame of /imu/data)
-            ├── lidar                     static (z 0.5; frame only, no sensor)
-            ├── camera                    static (x 0.2, z 0.4, faces +x)
-            │   └── camera_link_optical   static (z forward; images and /camera/camera/points)
-            └── body-v1                   static (y 0.05, z 0.3, yaw 180°; leg body)
-                ├── leg11 → leg12 → leg13 CCUP1, THIGH1, FOOT1   (robot_state_publisher from /joint_states)
-                ├── leg21 → leg22 → leg23 CCUP2, THIGH2, FOOT2
-                ├── leg31 → leg32 → leg33 CCUP3, THIGH3, FOOT3
-                └── leg41 → leg42 → leg43 CCUP4, THIGH4, FOOT4
+            └── quad_body                 static (botbase: z 0.3, yaw -90°; quadruped body)
+                ├── camera                static (front socket; 0.165 m forward, 0.337 m above base_link)
+                │   └── camera_link_optical   static (z forward; images and /camera/camera/points)
+                ├── servo_3 ─ ccup_3 → thigh_3 → foot_3   leg 1, back right
+                ├── servo_2 ─ ccup_2 → thigh_2 → foot_2   leg 2, back left
+                ├── servo_1 ─ ccup_1 → thigh_1 → foot_1   leg 3, front left
+                └── servo_4 ─ ccup_4 → thigh_4 → foot_4   leg 4, front right
 ```
+
+In the leg branches, `quad_body → servo_N` is the hip joint, `─` is a fixed joint and `→` is a moving joint (thigh, foot); robot_state_publisher computes them from `/joint_states`. With `robot:=quadruped` the tree is only the quadruped: `base_link` (the body) with its legs and camera, and no map, odom or base_footprint.
 
 - Wheel transforms come from diff_drive (`publish_wheel_tf`) because the wheel joints are not in ros2_control.
 - Gazebo merges fixed-joint links into one body, but TF still publishes every frame.
@@ -329,7 +368,7 @@ All nodes run on simulation time (`/clock` from Gazebo).
 | `/odom` | Odometry | diff_drive (ground truth) | RTAB-Map, Nav2 controller, velocity smoother |
 | **Robot state** | | | |
 | `/joint_states` | JointState | joint_state_broadcaster | robot_state_publisher |
-| `/joint_group_controller/commands` | Float64MultiArray | — | joint_group_controller (leg joint positions) |
+| `/joint_group_controller/commands` | Float64MultiArray | walk_gait (optional) | joint_group_controller (leg joint positions) |
 | `/robot_description` | String | robot_state_publisher | spawn_entity, RViz |
 | `/tf`, `/tf_static` | TFMessage | robot_state_publisher, diff_drive, RTAB-Map | All nodes |
 | **Mapping** | | | |
@@ -416,9 +455,9 @@ Nav2 runs from `navigation_launch.py` without map_server or AMCL: RTAB-Map suppl
 | `xy_goal_tolerance` | 0.25 m | SimpleGoalChecker (stateful) |
 | `yaw_goal_tolerance` | 0.25 rad | ~14° |
 | **Robot shape & clearance** | | |
-| `footprint` | `[[0.23, 0.19], [0.23, -0.19], [-0.27, -0.19], [-0.27, 0.19]]` | Measured from URDF meshes (rear feet to camera) |
+| `footprint` | `[[0.34, 0.19], [0.34, -0.19], [-0.21, -0.19], [-0.21, 0.19]]` | rover.urdf outline: x -0.20 (rear castor) to +0.33 m (front feet), y ±0.185 m. Real robot (quadruped alone, `nav2_params_real.yaml`): `[[0.34, 0.19], [0.34, -0.19], [-0.28, -0.19], [-0.28, 0.19]]` |
 | `footprint_padding` | 0.02 m | Both costmaps |
-| `inflation_radius` | 0.55 m | > footprint outer radius (~0.36 m); still leaves a lane in 1.85 m corridors |
+| `inflation_radius` | 0.55 m | > footprint outer radius (~0.42 m with padding); still leaves a lane in 1.85 m corridors |
 | `cost_scaling_factor` | 2.0 | Gentle cost fall-off keeps paths near corridor centres |
 | **Sensing** | | |
 | `obstacle_max_range` / `raytrace_max_range` | 3.0 / 4.0 m | Mark up to 3 m, clear up to 4 m |
@@ -540,7 +579,7 @@ Where to look when you want to change behaviour. Rebuild after editing any file.
 | Drive slower / faster under Nav2 (and while exploring) | `max_vel_x`, `max_speed_xy`, `max_vel_theta`; keep velocity_smoother `max_velocity` / `min_velocity` and behavior_server `max_rotational_vel` equal to them | `nav2_params.yaml` |
 | Turn more gently while mapping | `max_vel_theta` (try 0.3) | `nav2_params.yaml` |
 | Keep paths further from walls | `inflation_radius` ↑ or `cost_scaling_factor` ↓ | `nav2_params.yaml` |
-| Fit through tighter gaps | `inflation_radius` ↓ (keep > 0.36 m) | `nav2_params.yaml` |
+| Fit through tighter gaps | `inflation_radius` ↓ (keep > 0.42 m) | `nav2_params.yaml` |
 | Stop closer to the goal | `xy_goal_tolerance`, `yaw_goal_tolerance` | `nav2_params.yaml` |
 | Ignore low clutter / the floor | `min_obstacle_height` | `nav2_params.yaml` |
 | See obstacles further out | `obstacle_max_range` / `raytrace_max_range` | `nav2_params.yaml` |
@@ -554,6 +593,8 @@ Where to look when you want to change behaviour. Rebuild after editing any file.
 | Prefer close frontiers over big ones | `distance_weight` ↑ or `size_weight` ↓ | `frontier_explorer.py` |
 | Explore faster (less looking around) | `spin_on_arrival` false | `frontier_explorer.py` |
 | Give Nav2 longer before abandoning a goal | `progress_timeout` ↑ | `frontier_explorer.py` |
+| Stiffer / softer quadruped legs (`robot:=quadruped`) | `pos_kp` ↑ / ↓ (too high brings back jitter), `pos_kd` for damping | `quadruped.urdf` |
+| Faster / gentler leg motion | `max_joint_speed` | `walk_gait.py` |
 
 ### 8.1 Verification commands
 
@@ -591,11 +632,11 @@ The same RTAB-Map and Nav2 launch files take `mode:=real` (default `mode:=sim`, 
 ### 9.1 Real-mode notes
 
 - Localize on a saved map instead of mapping: `rtabmap.launch.py mode:=real localization:=true`. Keep a map without localizing: `delete_db:=false`.
-- Other options: `rtabmap_viz:=false`; `base_height` (base_link above floor, default 0.10); `use_imu` (pass the same value to both launch files).
+- Other options: `rtabmap_viz:=false`; `base_height` (base_link above floor, default 0.19); `use_imu` (pass the same value to both launch files).
 - Real TF tree: `map → odom → base_footprint → base_link → camera_link → RealSense optical frames`. `map → odom` comes from RTAB-Map, `odom → base_footprint` from rgbd_odometry, and the rest from static publishers and the RealSense driver.
 - Differences from sim: loop closure, neighbour refining and proximity links are on (the sim disables them for ground-truth odom); the costmap obstacle range is 0.3–2.5 m; `max_vel_theta` is 0.3 rad/s, and velocity_smoother and recovery spins (`behavior_server`) are capped to match (0.15 m/s / 0.3 rad/s); TF tolerances are 1.0 s.
 - Frontier exploration is off in real mode (`explore:=auto`) until it is tested on the robot; `explore:=true` turns it on.
-- The footprint and camera mount are still the URDF values; set them for the real robot ([section 9.3](#93-real-robot-dimensions)).
+- The real footprint is the quadruped alone from quadruped.urdf (feet at the zero pose and STAND: x -0.27 to +0.33 m, y ±0.185 m), with `base_link` at the body centre between the four hips. The camera mount defaults come from quadruped.urdf: `cam_x` 0.167, `cam_z` 0.013 (camera relative to the body centre) and `base_height` 0.19 (body centre above the floor in the STAND pose; about 0.165 at the zero pose) ([section 9.3](#93-real-robot-dimensions)).
 
 ### 9.2 Stereo IR mode (lower latency)
 
@@ -629,21 +670,25 @@ Check: the footprint outline in RViz matches the robot, and `ros2 run tf2_ros tf
 - **Map quality not yet confirmed** with loop closure disabled. Check that map → odom stays near zero.
 - **No hard speed cap on teleop.** `q` raises speed past the start values. A `cmd_vel_limiter` node (teleop → `/cmd_vel_teleop` → limiter → `/cmd_vel`) is proposed but not implemented.
 - **In-place turns** reach about 80% of the commanded rate because the wheels slip slightly; Nav2 compensates through odometry.
-- **Narrow sensor view.** The 60° camera sees nothing beside or behind the rover; the `lidar` link has no sensor plugin.
-- **Castor names are swapped:** `front_castor_wheel` sits at the rear (x -0.15).
+- **Narrow sensor view.** The 60° camera sees nothing beside or behind the rover, and there is no 360° sensor (the placeholder `lidar` link was removed).
+- **Simulated camera rate under load.** With RTAB-Map and Nav2 subscribed, depth and the point cloud drop to about 4 Hz (colour about 26 Hz) while the physics stays real-time.
 - **Frame mismatch:** Nav2 uses `base_link`, RTAB-Map uses `base_footprint`. Works because the transform between them is identity.
 - **DWB can stall in some maze spots:** the controller outputs ~0 m/s although the robot is in free space and can drive under teleop; Nav2's own recoveries (spin, wait, back up) do not get it out. Frontier exploration abandons such goals after 30 s and retries them once at the end.
 - **Depth rays leak past walls**, marking free cells on the far side. Exploration ignores those not connected to the robot, and blacklists the rest after one visit.
 - **Frontier exploration not yet confirmed end to end:** no complete run to `Exploration complete` with the current settings (see [section 7.6](#76-frontier-exploration)). Blacklists are stored by position, and nothing caps the total attempts or run time, so a frontier whose centre moves more than 0.5 m could be retried.
 - **Real robot: Nav2 driving and frontier exploration not tested yet** with the real camera on the robot; so far the camera was tested held in the hand.
-- **Real robot: camera mount and footprint** still use the rover.urdf values; measure them on the real robot ([section 9.3](#93-real-robot-dimensions)).
+- **Real robot: dimensions come from quadruped.urdf, not measured on the robot.** Camera mount (`cam_x` 0.167, `cam_z` 0.013), `base_height` 0.19 (STAND) and the footprint (covers both the zero pose and STAND); check them on the robot and trim the footprint once the standing pose is fixed ([section 9.3](#93-real-robot-dimensions)).
+- **Quadruped alone (`robot:=quadruped`):** walk_gait's crawl moves backwards (about 2 cm/s) and turns, because its inverse kinematics are from the old leg model. Standing up from the spawn pose can shift the robot by a few to tens of centimetres. There is no `/odom` or IMU, so RTAB-Map and Nav2 cannot run with it.
 - **Real Nav2 config lacks the exploration settings** (`always_send_full_costmap`, progress allowance, behavior_server `transform_tolerance`), and frontier parameters exist only as code defaults, in neither params file.
 
 ### 10.2 Troubleshooting
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| Spawners wait forever for `/controller_manager` | URDF failed to parse in gazebo_ros2_control | Look for colon-space in the URDF, including comments |
+| Spawners wait forever for `/controller_manager`; the legs hang straight down | URDF failed to parse in gazebo_ros2_control | Look for colon-space in the URDF, including comments |
+| Quadruped flips or flies away when it spawns (`robot:=quadruped`) | Leg joints teleported (`position` interface), or `hold_joints` on | Keep `position_pid` and `hold_joints` false in `quadruped.urdf` |
+| Quadruped jumps and falls when walk_gait starts | Legs commanded straight to a far pose | walk_gait's `max_joint_speed` (1 rad/s) |
+| Quadruped slides while standing | No foot contact settings | Keep the `foot_1`–`foot_4` contact blocks in `quadruped.urdf` |
 | Edits have no effect | Launch files read from `install/` | `colcon build --packages-select depth`, then restart |
 | Rover spins, tilts or slides | Wheels lost grip; castors carrying the weight | Keep castor collision radius below wheel radius |
 | Ring of obstacles ~2 m around the robot | Floor points in the costmap | `min_obstacle_height` above the floor in `map` / `odom` |
@@ -658,7 +703,7 @@ Check: the footprint outline in RViz matches the robot, and `ros2 run tf2_ros tf
 
 **Next: Nav2 and frontier exploration on the real robot with the real depth camera**
 
-- [ ] Measure the real robot's footprint and camera mount and set them ([section 9.3](#93-real-robot-dimensions))
+- [ ] Check the camera mount, base height and footprint on the real robot ([section 9.3](#93-real-robot-dimensions))
 - [ ] Add the exploration settings missing from `nav2_params_real.yaml` (`always_send_full_costmap`, progress allowance, behavior_server `transform_tolerance`)
 - [ ] Test Nav2 goals (2D Goal Pose) on the real robot with the camera mounted
 - [ ] Test frontier exploration on the real robot (`mode:=real explore:=true`, `spin_on_arrival:=false` first)
@@ -669,7 +714,8 @@ Check: the footprint outline in RViz matches the robot, and `ros2 run tf2_ros tf
 - [ ] Confirm the map stays straight with the current RTAB-Map settings
 - [ ] Optional `cmd_vel_limiter` node for a hard teleop speed cap
 - [ ] Lower Nav2 `max_vel_theta` to 0.3 rad/s while mapping
-- [ ] Add a lidar sensor plugin to the `lidar` link for 360° obstacle coverage
+- [ ] Add a 360° sensor (for example a lidar) for obstacles beside and behind the robot
+- [ ] Adapt walk_gait's inverse kinematics and stand pose to the new leg model (the crawl moves backwards)
 - [ ] Run frontier exploration to `Exploration complete` and record coverage and time
 - [ ] Cap exploration attempts per area and total run time
 - [ ] Find why DWB stalls in free space (see `/evaluation` critic scores) instead of relying on retries

@@ -1,11 +1,111 @@
 #!/usr/bin/env python3
 
 import math
+import os
 import threading
+import xml.etree.ElementTree as ET
 
+import numpy as np
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
+from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
+
+
+def rpy_matrix(roll, pitch, yaw):
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    return np.array([
+        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+        [-sp, cp * sr, cp * cr],
+    ])
+
+
+def axis_rotation(axis, angle):
+    k = np.asarray(axis) / np.linalg.norm(axis)
+    K = np.array([[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]])
+    return np.eye(3) + math.sin(angle) * K + (1 - math.cos(angle)) * K @ K
+
+
+class Leg:
+    """One leg of quadruped.urdf: hip roll, hip pitch and knee joints, toe point.
+
+    Positions are in base_link: origin at the centre of the four hips,
+    x forward, y left, z up.
+    """
+
+    # Toe: centre of the end of the foot mesh, in the foot link frame
+    # (the foot mesh is mirrored between the left and right legs)
+    TOE = {'left': np.array([-0.0195, -0.2083, 0.0038]),
+           'right': np.array([0.0195, -0.2083, 0.0038])}
+
+    def __init__(self, joints):
+        # joints: [(xyz, rotation, axis or None)] from base_link to the foot link
+        self.joints = joints
+        # Hip: the first moving joint
+        p, R = np.zeros(3), np.eye(3)
+        for xyz, rot, axis in joints:
+            p = p + R @ xyz
+            R = R @ rot
+            if axis is not None:
+                break
+        self.hip = p
+        self.toe = self.TOE['left' if p[1] > 0 else 'right']
+
+    def toe_position(self, q):
+        p, R, i = np.zeros(3), np.eye(3), 0
+        for xyz, rot, axis in self.joints:
+            p = p + R @ xyz
+            R = R @ rot
+            if axis is not None:
+                R = R @ axis_rotation(axis, q[i])
+                i += 1
+        return p + R @ self.toe
+
+    def ik(self, target, q):
+        """Joint angles that put the toe at target, starting from q (keeps that knee bend)."""
+        q = np.array(q, dtype=float)
+        for _ in range(20):
+            p = self.toe_position(q)
+            err = target - p
+            if np.linalg.norm(err) < 1e-5:
+                break
+            J = np.zeros((3, 3))
+            for i in range(3):
+                dq = q.copy()
+                dq[i] += 1e-6
+                J[:, i] = (self.toe_position(dq) - p) / 1e-6
+            q += np.linalg.solve(J.T @ J + 1e-6 * np.eye(3), J.T @ err)
+        return q
+
+
+def load_legs(urdf_path, feet):
+    root = ET.parse(urdf_path).getroot()
+    by_child = {j.find('child').get('link'): j for j in root.findall('joint')}
+
+    def origin(j):
+        o = j.find('origin')
+        xyz = np.array([float(v) for v in o.get('xyz', '0 0 0').split()])
+        rot = rpy_matrix(*[float(v) for v in o.get('rpy', '0 0 0').split()])
+        return xyz, rot
+
+    legs = []
+    for foot in feet:
+        chain, link = [], foot
+        while link != 'base_link':
+            j = by_child[link]
+            xyz, rot = origin(j)
+            axis = None
+            if j.get('type') != 'fixed':
+                axis = [float(v) for v in j.find('axis').get('xyz').split()]
+            chain.append((xyz, rot, axis))
+            link = j.find('parent').get('link')
+        chain.reverse()
+        legs.append(Leg(chain))
+    return legs
 
 
 class QuadCrawl(Node):
@@ -13,39 +113,55 @@ class QuadCrawl(Node):
     def __init__(self):
         super().__init__('quad_crawl')
 
-        # Robot geometry — same values as walk_simple.py
-        self.L1 = 0.050
-        self.L2 = 0.135
-        self.L3 = 0.1575
-
-        # self.nominal_z = 0.15
-        # self.nominal_y_back = 0.010
-        # self.nominal_y_front = 0.010
-
-        # # Conservative initial crawl parameters
-        # self.step_length = 0.030
-        # self.step_height = 0.030
-
+        p = self.declare_parameter
         # Gait parameters
-        self.step_length = 0.030
+        self.step_length = p('step_length', 0.06).value      # m, body travel per cycle
+        self.step_height = p('step_height', 0.04).value      # m, toe lift in swing
+        self.cycle_time = p('cycle_time', 2.0).value         # s, all four legs step once
+        # Body moves sideways away from the lifted legs, so the centre of mass
+        # stays inside the triangle of the other three feet
+        self.sway = p('sway', 0.04).value                    # m
+        self.body_height = p('body_height', 0.20).value      # m, hip centre above the toes
+        self.stance_width = p('stance_width', 0.16).value    # m, toe distance from the centre line
+        # Toes are centred under the centre of mass, 2.5 cm behind the hip centre
+        self.stance_x = p('stance_x', -0.025).value          # m
+        self.timer_period = 0.02
 
-        self.step_height_front = 0.030
-        self.step_height_back = 0.040
-
-        self.cycle_steps = 30
-        self.timer_period = 0.05
-
-        # Joint order: BR, BL, FL, FR
+        # Joint order: BR, BL, FL, FR (same order as controllers.yaml)
         self.joint_names = [
-            'CCUP1', 'THIGH1', 'FOOT1',
-            'CCUP2', 'THIGH2', 'FOOT2',
-            'CCUP3', 'THIGH3', 'FOOT3',
-            'CCUP4', 'THIGH4', 'FOOT4'
+            'base_link_Revolute_1', 'ccup_3_Revolute_31', 'thigh_3_Revolute_32',
+            'base_link_Revolute_3', 'ccup_2_Revolute_28', 'thigh_2_Revolute_29',
+            'base_link_Revolute_4', 'ccup_1_Revolute_25', 'thigh_1_Revolute_26',
+            'base_link_Revolute_2', 'ccup_4_Revolute_34', 'thigh_4_Revolute_35'
         ]
+        # Kinematics from the URDF; foot links in the same leg order
+        urdf = os.path.join(get_package_share_directory('depth'), 'urdf', 'quadruped.urdf')
+        self.legs = load_legs(urdf, ['foot_3', 'foot_2', 'foot_1', 'foot_4'])
+        # Hip x of each leg (front legs +, back legs -)
+        self.hip_x = [leg.hip[0] for leg in self.legs]
 
-        # Crawl order: move one leg at a time.
+        # Fastest a joint command may change while standing up or settling.
+        # Jumping straight to a far pose (e.g. from the spawn pose) makes the
+        # legs kick and flips the robot. The gait itself is not limited.
+        self.max_joint_speed = 1.0  # rad/s
+
+        # Crawl, one leg at a time. Each cycle:
+        #   0    - 0.25   all feet down: body forward half a step, sways right
+        #   0.25 - 0.5    BL then FL step
+        #   0.5  - 0.75   all feet down: body forward half a step, sways left
+        #   0.75 - 1      BR then FR step
+        # The body only moves while all four feet are down, so a foot that has
+        # just landed (still lightly loaded) is not dragged.
         # Leg indices: 0=BR, 1=BL, 2=FL, 3=FR.
-        self.phase_offsets = [0.0, 0.50, 0.0, 0.5]
+        self.swing_start = [0.75, 0.25, 0.375, 0.875]
+        self.swing_time = 0.125
+        # Toe x relative to the body over a cycle runs over one step length;
+        # this offset centres it on the stance position (in step lengths)
+        self.stride_centre = []
+        for leg in range(4):
+            rel = [self.foot_progress(leg, k / 200) - self.body_progress(k / 200)
+                   for k in range(200)]
+            self.stride_centre.append((max(rel) + min(rel)) / 2)
 
         # Use the same controller topic as walk_simple.py.
         self.publisher = self.create_publisher(
@@ -54,20 +170,30 @@ class QuadCrawl(Node):
             10
         )
 
-        # Standing joint angles must match your robot's known stable stance.
-        # These are placeholders until we verify your launch stance values.
-        # Standing angles observed in Gazebo
-        # Joint order: BR, BL, FL, FR
-        self.STAND = [
+        # Standing joint angles: knees bent backwards, as in the old STAND pose
+        # (Joint order: BR, BL, FL, FR), refined by IK to the stance below
+        seed = [
             0.0, -1.4002, -0.46137,  # BR
             0.0,  1.4002, -0.46137,  # BL
             0.0,  1.4002, -0.46137,  # FL
             0.0, -1.4002, -0.46137   # FR
         ]
+        self.leg_q = [np.array(seed[3 * i:3 * i + 3]) for i in range(4)]
+        self.STAND = self.calculate_stand_pose()
 
-        self.step = 0
+        self.phase = 0.0
+        # Gait amplitude 0..1: ramps up after f and down after s, so the
+        # legs start and stop from the standing pose without a jump
+        self.amplitude = 0.0
         self.walking = False
-        self.last_command = list(self.STAND)
+        # Starts from the measured joint angles (first /joint_states message)
+        self.last_command = None
+        # True once the legs have reached STAND; walking waits for it
+        self.standing = False
+
+        self.create_subscription(
+            JointState, '/joint_states', self.joint_states_callback, 10
+        )
 
         self.timer = self.create_timer(
             self.timer_period, self.update
@@ -78,48 +204,23 @@ class QuadCrawl(Node):
         ).start()
 
         self.get_logger().info(
-            "Quadruped crawl ready. Enter f to crawl, s to stop."
+            "Quadruped crawl ready. Enter f to walk, s to stop."
         )
 
-    @staticmethod
-    def clamp(value):
-        return max(-1.0, min(1.0, value))
+    def joint_states_callback(self, msg):
+        if self.last_command is not None:
+            return
+        positions = dict(zip(msg.name, msg.position))
+        if all(name in positions for name in self.joint_names):
+            self.last_command = [positions[name] for name in self.joint_names]
 
-    def IK_left(self, x, y, z):
-        L1, L2, L3 = self.L1, self.L2, self.L3
-
-        C = math.sqrt(x**2 + z**2)
-        D = math.sqrt(max(C**2 - L1**2, 0.0))
-        G = math.sqrt(D**2 + y**2)
-
-        J3 = math.acos(self.clamp(
-            (L2**2 + L3**2 - G**2) / (2 * L2 * L3)
-        )) - math.pi / 2
-
-        J2 = math.atan2(-y, D) + math.acos(self.clamp(
-            (L2**2 + G**2 - L3**2) / (2 * L2 * G)
-        ))
-
-        J1 = math.pi / 2 - math.atan2(-x, z) - math.atan2(D, L1)
-        return J1, J2, J3
-
-    def IK_right(self, x, y, z):
-        L1, L2, L3 = self.L1, self.L2, self.L3
-
-        C = math.sqrt(x**2 + z**2)
-        D = math.sqrt(max(C**2 - L1**2, 0.0))
-        G = math.sqrt(D**2 + y**2)
-
-        J3 = math.acos(self.clamp(
-            (L2**2 + L3**2 - G**2) / (2 * L2 * L3)
-        )) - math.pi / 2
-
-        J2 = -(math.atan2(-y, D) + math.acos(self.clamp(
-            (L2**2 + G**2 - L3**2) / (2 * L2 * G)
-        )))
-
-        J1 = math.atan2(x, z) + math.atan2(D, L1) - math.pi / 2
-        return J1, J2, J3
+    def limit_speed(self, targets):
+        # Move each joint at most max_joint_speed towards its target per timer tick
+        max_step = self.max_joint_speed * self.timer_period
+        return [
+            last + max(-max_step, min(max_step, target - last))
+            for last, target in zip(self.last_command, targets)
+        ]
 
     @staticmethod
     def smoothstep(u):
@@ -131,131 +232,117 @@ class QuadCrawl(Node):
     def is_right(self, leg):
         return leg in (0, 3)
 
-    # def foot_target(self, leg, phase):
-    #     x = 0.05 if self.is_right(leg) else -0.05
-    #     y0 = (
-    #         self.nominal_y_front
-    #         if self.is_front(leg)
-    #         else self.nominal_y_back
-    #     )
-    #     z0 = self.nominal_z
-    #     length = self.step_length
+    def nominal_foot(self, leg):
+        y = -self.stance_width if self.is_right(leg) else self.stance_width
+        return np.array([self.hip_x[leg] + self.stance_x, y, -self.body_height])
 
-    #     if phase < 0.5:
-    #         # Swing phase: lift the foot while moving forward.
-    #         u = phase / 0.5
-    #         s = self.smoothstep(u)
-    #         y = y0 - length + 2.0 * length * s
-    #         z = z0 - self.step_height * math.sin(math.pi * u)
-    #     else:
-    #         # Stance phase: return the foot along the ground.
-    #         u = (phase - 0.5) / 0.5
-    #         s = self.smoothstep(u)
-    #         y = y0 + length - 2.0 * length * s
-    #         z = z0
+    def body_progress(self, phase):
+        """Body travel (in step lengths) since the start of the cycle."""
+        if phase < 0.25:
+            return 0.5 * self.smoothstep(phase / 0.25)
+        if phase < 0.5:
+            return 0.5
+        if phase < 0.75:
+            return 0.5 + 0.5 * self.smoothstep((phase - 0.5) / 0.25)
+        return 1.0
 
-    #     return x, y, z
+    def foot_progress(self, leg, phase):
+        """Toe travel over the ground (in step lengths) since the start of the cycle."""
+        u = (phase - self.swing_start[leg]) / self.swing_time
+        if u <= 0.0:
+            return 0.0
+        if u >= 1.0:
+            return 1.0
+        # Cycloid: lifts off and lands with zero speed
+        return u - math.sin(2 * math.pi * u) / (2 * math.pi)
+
+    def body_sway(self, phase):
+        """Sideways body offset (m, +y = left): right while the left legs step, left
+        while the right legs step, moving across while all four feet are down."""
+        sway = self.sway * self.amplitude
+        if phase < 0.25:
+            return sway - 2 * sway * self.smoothstep(phase / 0.25)
+        if phase < 0.5:
+            return -sway
+        if phase < 0.75:
+            return -sway + 2 * sway * self.smoothstep((phase - 0.5) / 0.25)
+        return sway
 
     def foot_target(self, leg, phase):
-        x = 0.05 if self.is_right(leg) else -0.05
+        """Toe position relative to the body for the cycle phase."""
+        length = self.step_length * self.amplitude
+        height = self.step_height * self.amplitude
 
-        height = (
-            self.step_height_front
-            if self.is_front(leg)
-            else self.step_height_back
-        )
+        dx = length * (self.foot_progress(leg, phase) - self.body_progress(phase)
+                       - self.stride_centre[leg])
+        dz = 0.0
+        u = (phase - self.swing_start[leg]) / self.swing_time
+        if 0.0 < u < 1.0:
+            dz = height * (1 - math.cos(2 * math.pi * u)) / 2
+        # Moving the body sideways = moving every foot the other way
+        dy = -self.body_sway(phase)
 
-        length = self.step_length
+        return self.nominal_foot(leg) + np.array([dx, dy, dz])
 
-        # Fixed centre of the foot trajectory
-        y0 = -0.010 if not self.is_front(leg) else 0.010
-        z0 = 0.15
-
-        # Centre -> left endpoint -> top -> right endpoint -> centre
-        points = [
-            (0.0, 0.0),
-            (-length, 0.0),
-            (0.0, -height),
-            (length, 0.0),
-            (0.0, 0.0),
-        ]
-
-        scaled = (phase % 1.0) * 4.0
-        segment = min(int(scaled), 3)
-        u = self.smoothstep(scaled - segment)
-
-        y1, z1 = points[segment]
-        y2, z2 = points[segment + 1]
-
-        y = y0 + y1 + (y2 - y1) * u
-        z = z0 + z1 + (z2 - z1) * u
-
-        return x, y, z
-
-    def ik_for_leg(self, leg, x, y, z):
-        if self.is_right(leg):
-            return self.IK_right(x, y, z)
-        return self.IK_left(x, y, z)
+    def ik_for_leg(self, leg, target):
+        # Start from the leg's last solution so it keeps the same knee bend
+        self.leg_q[leg] = self.legs[leg].ik(target, self.leg_q[leg])
+        return list(self.leg_q[leg])
 
     def calculate_stand_pose(self):
         stand = []
-
         for leg in range(4):
-            x = 0.05 if leg in (0, 3) else -0.05
-            y = (
-                self.nominal_y_front
-                if self.is_front(leg)
-                else self.nominal_y_back
-            )
-
-            J1, J2, J3 = self.ik_for_leg(
-                leg, x, y, self.nominal_z
-            )
-            stand.extend([J1, J2, J3])
-
+            stand.extend(self.ik_for_leg(leg, self.nominal_foot(leg)))
         return stand
 
-    
     def update(self):
-        positions = []
+        if self.last_command is None:
+            # Wait for the first /joint_states so the legs start from where they are
+            return
 
-        if self.walking:
-            for leg in range(4):
-                phase = (
-                    self.step / self.cycle_steps
-                    + self.phase_offsets[leg]
-                ) % 1.0
-
-                x, y, z = self.foot_target(leg, phase)
-                positions.extend(self.ik_for_leg(leg, x, y, z))
-
-            self.step = (self.step + 1) % self.cycle_steps
-
+        if not self.standing:
+            # Stand up slowly first
+            positions = self.limit_speed(self.STAND)
+            self.standing = max(abs(a - b) for a, b in zip(positions, self.STAND)) < 1e-6
+            if self.standing:
+                self.get_logger().info("Standing.")
         else:
-            # Hold the calculated standing configuration.
-            positions = list(self.STAND)
+            # Ramp the gait in and out over one cycle
+            ramp = self.timer_period / self.cycle_time
+            if self.walking:
+                self.amplitude = min(1.0, self.amplitude + ramp)
+            else:
+                self.amplitude = max(0.0, self.amplitude - ramp)
+
+            if self.walking or self.amplitude > 0.0:
+                self.phase = (self.phase + self.timer_period / self.cycle_time) % 1.0
+
+            positions = []
+            for leg in range(4):
+                positions.extend(self.ik_for_leg(leg, self.foot_target(leg, self.phase)))
 
         msg = Float64MultiArray()
-        msg.data = positions
+        msg.data = [float(v) for v in positions]
         self.publisher.publish(msg)
         self.last_command = list(positions)
-
 
     def keyboard_input(self):
         while rclpy.ok():
             try:
-                command = input("Command (f=crawl, s=stop): ").strip().lower()
+                command = input("Command (f=walk, s=stop): ").strip().lower()
             except EOFError:
                 break
 
             if command == 'f':
                 self.walking = True
-                self.get_logger().info("Crawl started.")
+                self.get_logger().info(
+                    "Walking." if self.standing else "Walking once standing.")
             elif command == 's':
                 self.walking = False
-                self.get_logger().info("Crawl stopped; last joint command held.")
+                self.get_logger().info("Stopping; legs return to the standing pose.")
             else:
                 print("Enter f or s.")
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -266,7 +353,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

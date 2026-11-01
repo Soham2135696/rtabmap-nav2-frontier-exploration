@@ -166,8 +166,8 @@ global_costmap:
         inflation_radius: 0.55
         cost_scaling_factor: 2.0
 
-      # Measured from rover.urdf: x -0.26..+0.21 (rear feet, front camera), y +-0.18
-      footprint: "[[0.23, 0.19], [0.23, -0.19], [-0.27, -0.19], [-0.27, 0.19]]"
+      # Measured from rover.urdf: x -0.20..+0.33 (rear castor, front feet), y +-0.185
+      footprint: "[[0.34, 0.19], [0.34, -0.19], [-0.21, -0.19], [-0.21, 0.19]]"
       footprint_padding: 0.02
 
 
@@ -220,6 +220,6 @@ local_costmap:
         inflation_radius: 0.55
         cost_scaling_factor: 2.0
 
-      # Measured from rover.urdf: x -0.26..+0.21 (rear feet, front camera), y +-0.18
-      footprint: "[[0.23, 0.19], [0.23, -0.19], [-0.27, -0.19], [-0.27, 0.19]]"
+      # Measured from rover.urdf: x -0.20..+0.33 (rear castor, front feet), y +-0.185
+      footprint: "[[0.34, 0.19], [0.34, -0.19], [-0.21, -0.19], [-0.21, 0.19]]"
       footprint_padding: 0.02

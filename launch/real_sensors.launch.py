@@ -101,15 +101,17 @@ def generate_launch_description():
     use_imu = LaunchConfiguration('use_imu')
 
     args = [
-        # Real mount of the D435i relative to base_link (defaults = rover.urdf camera_joint)
-        DeclareLaunchArgument('cam_x', default_value='0.2'),
+        # Real mount of the D435i relative to base_link (the body centre, between the
+        # four hips). Defaults = quadruped.urdf camera in the body's front socket
+        DeclareLaunchArgument('cam_x', default_value='0.167'),
         DeclareLaunchArgument('cam_y', default_value='0.0'),
-        DeclareLaunchArgument('cam_z', default_value='0.4'),
+        DeclareLaunchArgument('cam_z', default_value='0.013'),
         DeclareLaunchArgument('cam_roll', default_value='0.0'),
         DeclareLaunchArgument('cam_pitch', default_value='0.0'),
         DeclareLaunchArgument('cam_yaw', default_value='0.0'),
-        # Height of base_link above the floor (base_footprint), as in rover.urdf
-        DeclareLaunchArgument('base_height', default_value='0.10'),
+        # Height of base_link above the floor (base_footprint): quadruped.urdf body
+        # centre in the STAND pose (about 0.165 at the zero pose)
+        DeclareLaunchArgument('base_height', default_value='0.19'),
         # IMU filter needs ros-humble-imu-filter-madgwick; off automatically if missing
         DeclareLaunchArgument('use_imu',
                               default_value='true' if madgwick_available else 'false'),

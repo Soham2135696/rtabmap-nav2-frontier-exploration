@@ -12,15 +12,15 @@ controller_manager:
 joint_group_controller:
   ros__parameters:
     joints:
-      - CCUP1
-      - THIGH1
-      - FOOT1
-      - CCUP2
-      - THIGH2
-      - FOOT2
-      - CCUP3
-      - THIGH3
-      - FOOT3
-      - CCUP4
-      - THIGH4
-      - FOOT4
+      - base_link_Revolute_1
+      - ccup_3_Revolute_31
+      - thigh_3_Revolute_32
+      - base_link_Revolute_3
+      - ccup_2_Revolute_28
+      - thigh_2_Revolute_29
+      - base_link_Revolute_4
+      - ccup_1_Revolute_25
+      - thigh_1_Revolute_26
+      - base_link_Revolute_2
+      - ccup_4_Revolute_34
+      - thigh_4_Revolute_35

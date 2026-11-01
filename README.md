@@ -9,6 +9,7 @@
   - [Build and terminal setup](#build-and-terminal-setup)
   - [Simulation: mapping + Nav2 + frontier exploration](#simulation-mapping--nav2--frontier-exploration)
   - [Real robot: camera mapping + Nav2](#real-robot-camera-mapping--nav2)
+  - [Real robot legs: Gazebo → ESP servos](#real-robot-legs-gazebo--esp-servos)
 - [1. Overview](#1-overview)
   - [1.1 At a glance](#11-at-a-glance)
 - [2. Running notes](#2-running-notes)
@@ -27,6 +28,7 @@
   - [9.1 Real-mode notes](#91-real-mode-notes)
   - [9.2 Stereo IR mode (lower latency)](#92-stereo-ir-mode-lower-latency)
   - [9.3 Real robot dimensions](#93-real-robot-dimensions)
+  - [9.4 Real robot legs (ESP servo bridge)](#94-real-robot-legs-esp-servo-bridge)
 - [10. Known issues and next steps](#10-known-issues-and-next-steps)
   - [10.1 Open issues](#101-open-issues) · [10.2 Troubleshooting](#102-troubleshooting) · [10.3 Next steps](#103-next-steps)
 
@@ -97,7 +99,7 @@ Start the terminals in this order:
 - Add `gui:=false` to terminal 1 for Gazebo without windows (no RViz).
 - RTAB-Map deletes `~/.ros/rtabmap.db` on every start, so each run maps from scratch.
 
-**Quadruped on its own (no rover):** `ros2 launch depth 2_gazebo.launch.py robot:=quadruped` spawns `urdf/quadruped.urdf` standing on the floor, facing +x. Move the legs with `ros2 run depth walk_gait` in a second terminal: it rises to the stand pose, `f` crawls, `s` stands. RTAB-Map and Nav2 are not set up for it ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)).
+**Quadruped on its own (no rover):** `ros2 launch depth 2_gazebo.launch.py robot:=quadruped` spawns `urdf/quadruped.urdf` standing on the floor, facing +x. Move the legs with `ros2 run depth walk_gait` in a second terminal: it rises to the stand pose, `f` walks, `s` stands. RTAB-Map and Nav2 are not set up for it ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)).
 
 ### Real robot: camera mapping + Nav2
 
@@ -119,6 +121,18 @@ Start the terminals in this order:
 > **Real robot status**
 > - **Tested:** the real D435i depth camera with RTAB-Map mapping and the Nav2 costmaps, with the camera held in the hand. Nav2 is set up for real mode (`config/nav2_params_real.yaml`).
 > - **Not tested yet:** Nav2 driving the actual robot and frontier exploration (`explore:=true`) with the real camera on the robot. `nav2_params_real.yaml` also still lacks the exploration settings ([section 10.1](#101-open-issues)).
+
+### Real robot legs: Gazebo → ESP servos
+
+The real legs copy the simulated quadruped: `esp` sends the Gazebo joint angles over USB serial to the ESP that drives the 12 servos. Connect the ESP (`/dev/ttyUSB0`), then start the terminals in this order:
+
+| Terminal | Command | Notes |
+| --- | --- | --- |
+| **1. Gazebo + robot** | `ros2 launch depth 2_gazebo.launch.py robot:=quadruped` | Leave out `robot:=` for the rover version; the legs are the same |
+| **2. ESP bridge** | `ros2 run depth esp` | Prints `Serial connected`, then a `Sent: …` line for every `/joint_states` message (100 Hz) |
+| **3. Gait** | `ros2 run depth walk_gait` | Rises to the stand pose in about 1.4 s; `f` walks, `s` stands |
+
+> **Hold or prop up the robot on the first run.** The servos move as soon as `esp` starts: first to the Gazebo pose (all joints 0 = 90° on the servos), then to the stand pose. The real robot copies what the simulated legs actually do, including lag or a fall in Gazebo. Details: [section 9.4](#94-real-robot-legs-esp-servo-bridge).
 
 ---
 
@@ -178,7 +192,9 @@ All launch, config, URDF, mesh and world files are installed to `install/depth/s
 | `worlds/maze.world` | The maze used by `2_gazebo.launch.py` |
 | **Nodes** | |
 | `depth/frontier_explorer.py` | Frontier exploration node (`ros2 run depth frontier_explorer`); parameters have built-in defaults, see [section 7.6](#76-frontier-exploration) |
-| `depth/walk_gait.py` | Leg gait (`ros2 run depth walk_gait`): holds the stand pose, `f` crawls, `s` stands; 12 joint angles on `/joint_group_controller/commands` at 20 Hz, each joint moving at most 1 rad/s ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)) |
+| `depth/walk_gait.py` | Leg gait (`ros2 run depth walk_gait`): holds the stand pose, `f` walks, `s` stands; 12 joint angles on `/joint_group_controller/commands` at 20 Hz, each joint moving at most 1 rad/s ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)). Older versions are kept commented out at the top of the file |
+| `depth/esp.py` | Serial bridge to the real servos (`ros2 run depth esp`): `/joint_states` → 12 servo angles on `/dev/ttyUSB0` ([section 9.4](#94-real-robot-legs-esp-servo-bridge)). Older versions are kept commented out at the top of the file |
+| `depth/cal_servo.py` | Old servo calibration test (`ros2 run depth cal_servo`). Still uses the old model's joint names (`CCUP1`, `THIGH1`, `FOOT1`, …), so it sends nothing with the current model |
 | **Other** | |
 | `depth/__init__.py` | Python package marker |
 | `test/` | Standard ament copyright, flake8 and pep257 tests |
@@ -273,9 +289,19 @@ Physics settings, only in `quadruped.urdf` (the rover's legs never touch the flo
 | **`hold_joints`** | false (gazebo_ros2_control plugin) | Otherwise the joints are locked at zero speed until the controller starts, which threw the robot around when it landed |
 | **Feet** (`foot_1`–`foot_4`) | `mu1 = mu2 = 1.0`, `kp 1e5`, `kd 100`, `minDepth 0.001`, `maxVel 0` | Without them the feet jitter on the floor and the robot slides about 5 mm/s while standing |
 
-**walk_gait** (`depth/walk_gait.py`) publishes the 12 joint angles on `/joint_group_controller/commands` at 20 Hz, in the order of the table in [section 4.2](#42-links-and-joints). It holds the stand pose; type `f` to crawl and `s` to stand again. Each joint command moves at most `max_joint_speed` (1.0 rad/s), starting from the angles of the first `/joint_states` message, so the robot rises to the stand pose in about 1.4 s. Jumping straight to the stand pose made the legs kick and flipped the robot. walk_gait works with both robots; on the rover the legs only swing.
+**walk_gait** (`depth/walk_gait.py`) publishes the 12 joint angles on `/joint_group_controller/commands` at 20 Hz, in the order of the table in [section 4.2](#42-links-and-joints). It is the gait from the Gazebo Harmonic version of this robot, with the Classic joint names; the two models have the same joints. walk_gait works with both robots; on the rover the legs only swing.
 
-**Test status (simulation):** the quadruped spawns level at the spawn point, stands without drifting (about 2° roll) and no longer flips when walk_gait starts. The crawl stays upright but moves backwards (about 2 cm/s) and turns slowly: walk_gait's inverse kinematics and stand pose were written for the old leg model and are not adapted to the new one yet.
+| Part | How it works |
+| --- | --- |
+| **Commands** | Holds the stand pose (`STAND`, thigh ±1.40 rad, foot −0.46 rad). Type `f` to walk and `s` to stand again |
+| **Inverse kinematics** | Closed-form 3-joint leg solution (`IK_left`, `IK_right`) with link lengths `L1` 0.050, `L2` 0.135, `L3` 0.1575 m |
+| **Foot path** | Four points per leg, `step_time` 0.5 s each (2 s cycle): centre → back (`step_length` 0.010 m) → lifted (`step_height` 0.010 m) → front → centre |
+| **Leg timing** | Diagonal pairs half a cycle apart (`phase_offsets` `[0, 2, 0, 2]`): back-right with front-left, back-left with front-right |
+| **Speed limit** | Each joint moves at most `max_joint_speed` (1.0 rad/s) towards its target, starting from the angles of the first `/joint_states` message. The robot rises to the stand pose in about 1.4 s, and `f` / `s` blend in over about 0.3 s instead of jumping. Jumping straight to the stand pose made the legs kick and flipped the robot |
+
+walk_gait waits for `/joint_states` before it publishes anything, so Gazebo has to be running.
+
+**Test status:** the quadruped spawns level at the spawn point and stands without drifting (about 2° roll). With `esp` running, the real servos follow the simulated legs through stand-up and walking (tested 1 Nov 2026). How far and how straight the current gait walks in Gazebo has not been measured yet.
 
 ---
 
@@ -367,7 +393,7 @@ All nodes run on simulation time (`/clock` from Gazebo).
 | `/imu/data` | Imu | IMU plugin | Not used yet |
 | `/odom` | Odometry | diff_drive (ground truth) | RTAB-Map, Nav2 controller, velocity smoother |
 | **Robot state** | | | |
-| `/joint_states` | JointState | joint_state_broadcaster | robot_state_publisher |
+| `/joint_states` | JointState | joint_state_broadcaster | robot_state_publisher; walk_gait (first message only); esp (real servos) |
 | `/joint_group_controller/commands` | Float64MultiArray | walk_gait (optional) | joint_group_controller (leg joint positions) |
 | `/robot_description` | String | robot_state_publisher | spawn_entity, RViz |
 | `/tf`, `/tf_static` | TFMessage | robot_state_publisher, diff_drive, RTAB-Map | All nodes |
@@ -595,6 +621,8 @@ Where to look when you want to change behaviour. Rebuild after editing any file.
 | Give Nav2 longer before abandoning a goal | `progress_timeout` ↑ | `frontier_explorer.py` |
 | Stiffer / softer quadruped legs (`robot:=quadruped`) | `pos_kp` ↑ / ↓ (too high brings back jitter), `pos_kd` for damping | `quadruped.urdf` |
 | Faster / gentler leg motion | `max_joint_speed` | `walk_gait.py` |
+| Longer / higher / slower steps | `step_length`, `step_height`, `step_time` | `walk_gait.py` |
+| A real servo turns the wrong way | Its sign (`+` / `-`) in front of `math.degrees(...)` | `esp.py` ([section 9.4](#94-real-robot-legs-esp-servo-bridge)) |
 
 ### 8.1 Verification commands
 
@@ -661,6 +689,42 @@ Real mode does not read `rover.urdf` (simulation only). Set the real robot's siz
 
 Check: the footprint outline in RViz matches the robot, and `ros2 run tf2_ros tf2_echo base_footprint camera_link` shows the measured camera position.
 
+### 9.4 Real robot legs (ESP servo bridge)
+
+`esp` (`depth/esp.py`) makes the real legs copy the simulated ones. It reads `/joint_states` from Gazebo and writes one line of 12 servo angles per message to the ESP. The commands are under [Start here → Real robot legs](#real-robot-legs-gazebo--esp-servos). It is the bridge from the Gazebo Harmonic version of this robot, with the Classic joint names.
+
+| Item | Value |
+| --- | --- |
+| **Serial** | `/dev/ttyUSB0`, 115200 baud. If the port does not open, `esp` logs a serial error and sends nothing |
+| **Line format** | 12 space-separated angles in degrees, 2 decimals, ending in a newline, in the order leg 1 → leg 4, each leg hip, thigh, foot |
+| **Rate** | One line per `/joint_states` message, 100 Hz (`update_rate` in `config/controllers.yaml`) |
+| **Missing joints** | If the joint names are not in `/joint_states`, nothing is sent and `esp` warns every 2 s |
+
+Each angle is `±degrees(joint angle) + 90`, so the URDF zero pose is 90° on every servo. The signs match how each servo is mounted:
+
+| ESP name | URDF joint | Servo angle |
+| --- | --- | --- |
+| **Leg 1 (back right)** | | |
+| `CCUP1` (hip) | `base_link_Revolute_1` | +deg + 90 |
+| `THIGH1` | `ccup_3_Revolute_31` | −deg + 90 |
+| `FOOT1` | `thigh_3_Revolute_32` | −deg + 90 |
+| **Leg 2 (back left)** | | |
+| `CCUP2` (hip) | `base_link_Revolute_3` | +deg + 90 |
+| `THIGH2` | `ccup_2_Revolute_28` | −deg + 90 |
+| `FOOT2` | `thigh_2_Revolute_29` | +deg + 90 |
+| **Leg 3 (front left)** | | |
+| `CCUP3` (hip) | `base_link_Revolute_4` | −deg + 90 |
+| `THIGH3` | `ccup_1_Revolute_25` | −deg + 90 |
+| `FOOT3` | `thigh_1_Revolute_26` | +deg + 90 |
+| **Leg 4 (front right)** | | |
+| `CCUP4` (hip) | `base_link_Revolute_2` | −deg + 90 |
+| `THIGH4` | `ccup_4_Revolute_34` | −deg + 90 |
+| `FOOT4` | `thigh_4_Revolute_35` | −deg + 90 |
+
+- **No clamp:** the 0–180° clamp is turned off, so an angle outside the servo range goes straight to the ESP.
+- **Gazebo is needed:** `esp` copies the simulation, so it sends nothing unless Gazebo publishes `/joint_states`.
+- **Only one serial user:** `esp` and `cal_servo` both open `/dev/ttyUSB0`; run one at a time.
+
 ---
 
 ## 10. Known issues and next steps
@@ -678,7 +742,9 @@ Check: the footprint outline in RViz matches the robot, and `ros2 run tf2_ros tf
 - **Frontier exploration not yet confirmed end to end:** no complete run to `Exploration complete` with the current settings (see [section 7.6](#76-frontier-exploration)). Blacklists are stored by position, and nothing caps the total attempts or run time, so a frontier whose centre moves more than 0.5 m could be retried.
 - **Real robot: Nav2 driving and frontier exploration not tested yet** with the real camera on the robot; so far the camera was tested held in the hand.
 - **Real robot: dimensions come from quadruped.urdf, not measured on the robot.** Camera mount (`cam_x` 0.167, `cam_z` 0.013), `base_height` 0.19 (STAND) and the footprint (covers both the zero pose and STAND); check them on the robot and trim the footprint once the standing pose is fixed ([section 9.3](#93-real-robot-dimensions)).
-- **Quadruped alone (`robot:=quadruped`):** walk_gait's crawl moves backwards (about 2 cm/s) and turns, because its inverse kinematics are from the old leg model. Standing up from the spawn pose can shift the robot by a few to tens of centimetres. There is no `/odom` or IMU, so RTAB-Map and Nav2 cannot run with it.
+- **Quadruped alone (`robot:=quadruped`):** how far and how straight the current gait walks in Gazebo has not been measured yet. Standing up from the spawn pose can shift the robot by a few to tens of centimetres. There is no `/odom` or IMU, so RTAB-Map and Nav2 cannot run with it.
+- **Real legs only copy the simulation.** `esp` needs Gazebo running, and the servos follow whatever the simulated legs do, including slips or falls. Its 0–180° clamp is off ([section 9.4](#94-real-robot-legs-esp-servo-bridge)).
+- **`cal_servo.py` uses the old joint names** (`CCUP1`, …), so it sends nothing with the current model.
 - **Real Nav2 config lacks the exploration settings** (`always_send_full_costmap`, progress allowance, behavior_server `transform_tolerance`), and frontier parameters exist only as code defaults, in neither params file.
 
 ### 10.2 Troubleshooting
@@ -689,7 +755,10 @@ Check: the footprint outline in RViz matches the robot, and `ros2 run tf2_ros tf
 | Quadruped flips or flies away when it spawns (`robot:=quadruped`) | Leg joints teleported (`position` interface), or `hold_joints` on | Keep `position_pid` and `hold_joints` false in `quadruped.urdf` |
 | Quadruped jumps and falls when walk_gait starts | Legs commanded straight to a far pose | walk_gait's `max_joint_speed` (1 rad/s) |
 | Quadruped slides while standing | No foot contact settings | Keep the `foot_1`–`foot_4` contact blocks in `quadruped.urdf` |
-| Edits have no effect | Launch files read from `install/` | `colcon build --packages-select depth`, then restart |
+| Edits have no effect | Launch files and nodes run from `install/` | `colcon build --packages-select depth`, then `source install/setup.bash` and restart |
+| `esp` prints `Serial connected` but no `Sent:` lines, and the real legs do not move | Old `esp` still installed (old joint names), or Gazebo not running | Rebuild, re-source and restart `esp`; check `ros2 topic hz /joint_states` |
+| `esp` logs a serial error | ESP on another port, or no permission | `ls /dev/ttyUSB*`; add your user to `dialout` (`sudo usermod -aG dialout $USER`, then log in again) |
+| walk_gait prints `ready` but the legs never move | No `/joint_states` yet (Gazebo not running) | Start Gazebo first |
 | Rover spins, tilts or slides | Wheels lost grip; castors carrying the weight | Keep castor collision radius below wheel radius |
 | Ring of obstacles ~2 m around the robot | Floor points in the costmap | `min_obstacle_height` above the floor in `map` / `odom` |
 | Doubled, rotated walls in the map | Wrong loop closures or proximity links | Check `tf2_echo map odom`; see [section 6](#6-mapping-configuration-rtab-map) |
@@ -715,7 +784,9 @@ Check: the footprint outline in RViz matches the robot, and `ros2 run tf2_ros tf
 - [ ] Optional `cmd_vel_limiter` node for a hard teleop speed cap
 - [ ] Lower Nav2 `max_vel_theta` to 0.3 rad/s while mapping
 - [ ] Add a 360° sensor (for example a lidar) for obstacles beside and behind the robot
-- [ ] Adapt walk_gait's inverse kinematics and stand pose to the new leg model (the crawl moves backwards)
+- [ ] Measure the current gait in Gazebo (speed, drift) and tune `step_length` / `step_height` / `step_time`
+- [ ] Update `cal_servo.py` to the current joint names, or remove it
+- [ ] Turn the 0–180° servo clamp back on in `esp.py` once the angle ranges are checked
 - [ ] Run frontier exploration to `Exploration complete` and record coverage and time
 - [ ] Cap exploration attempts per area and total run time
 - [ ] Find why DWB stalls in free space (see `/evaluation` critic scores) instead of relying on retries

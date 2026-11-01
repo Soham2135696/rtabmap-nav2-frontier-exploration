@@ -448,11 +448,118 @@
 #     main()
 #!/usr/bin/env python3
 
+# import math
+# import rclpy
+# from rclpy.node import Node
+# from sensor_msgs.msg import JointState
+# import serial
+
+
+# class SerialBridgeLeg12(Node):
+
+#     def __init__(self):
+#         super().__init__('serial_bridge_leg12')
+
+        # -------- SERIAL SETUP --------
+#         try:
+#             self.ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+#             self.get_logger().info("✅ Serial connected")
+#         except Exception as e:
+#             self.get_logger().error(f"❌ Serial error: {e}")
+#             self.ser = None
+
+        # -------- SUBSCRIBER --------
+#         self.sub = self.create_subscription(
+#             JointState,
+#             '/joint_states',
+#             self.callback,
+#             10
+#         )
+
+    # -------- UTILS --------
+#     def clamp(self, x):
+        # return max(0, min(180, x))
+#         return x
+
+    # -------- CALLBACK --------
+#     def callback(self, msg: JointState):
+
+#         try:
+            # -------- LEG 1 --------
+#             ccup1  = math.degrees(msg.position[msg.name.index("CCUP1")]) +90
+#             thigh1 = -math.degrees(msg.position[msg.name.index("THIGH1")]) +90
+#             foot1  = -math.degrees(msg.position[msg.name.index("FOOT1")]) +90
+
+            # -------- LEG 2 --------
+#             ccup2  = math.degrees(msg.position[msg.name.index("CCUP2")]) +90
+#             thigh2 = -math.degrees(msg.position[msg.name.index("THIGH2")]) +90
+#             foot2  = math.degrees(msg.position[msg.name.index("FOOT2")]) +90
+
+            # -------- LEG 3 --------
+#             ccup3  = -math.degrees(msg.position[msg.name.index("CCUP3")]) +90
+#             thigh3 = -math.degrees(msg.position[msg.name.index("THIGH3")]) +90
+#             foot3  = math.degrees(msg.position[msg.name.index("FOOT3")]) +90
+
+            # -------- LEG 4 --------
+#             ccup4  = -math.degrees(msg.position[msg.name.index("CCUP4")]) +90
+#             thigh4 = -math.degrees(msg.position[msg.name.index("THIGH4")]) +90 
+#             foot4  = -math.degrees(msg.position[msg.name.index("FOOT4")]) +90
+
+            # -------- CLAMP --------
+#             ccup1, thigh1, foot1 = self.clamp(ccup1), self.clamp(thigh1), self.clamp(foot1)
+#             ccup2, thigh2, foot2 = self.clamp(ccup2), self.clamp(thigh2), self.clamp(foot2)
+#             ccup3, thigh3, foot3 = self.clamp(ccup3), self.clamp(thigh3), self.clamp(foot3)
+#             ccup4, thigh4, foot4 = self.clamp(ccup4), self.clamp(thigh4), self.clamp(foot4)           
+
+            # -------- FORMAT --------
+            # Order: L1 → L4
+#             data = (
+#                 f"{ccup1:.2f} {thigh1:.2f} {foot1:.2f} "
+#                 f"{ccup2:.2f} {thigh2:.2f} {foot2:.2f} "
+#                 f"{ccup3:.2f} {thigh3:.2f} {foot3:.2f} "
+#                 f"{ccup4:.2f} {thigh4:.2f} {foot4:.2f}\n"
+#             )
+
+            # -------- SEND --------
+#             if self.ser:
+#                 self.ser.write(data.encode())
+
+#             self.get_logger().info(f"Sent: {data.strip()}")
+
+#         except ValueError:
+            # Happens when joint names not yet published
+#             pass
+
+
+# def main(args=None):
+#     rclpy.init(args=args)
+#     node = SerialBridgeLeg12()
+#     rclpy.spin(node)
+#     node.destroy_node()
+#     rclpy.shutdown()
+
+
+# if __name__ == '__main__':
+#     main()
+
+
+#!/usr/bin/env python3
+
 import math
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 import serial
+
+# Joint names in quadruped.urdf (Gazebo Classic) -> leg/joint names used below.
+# Leg numbering is the gait's: 1=BR, 2=BL, 3=FL, 4=FR (same as config/controllers.yaml).
+JOINT = {
+    "CCUP1": "base_link_Revolute_1", "THIGH1": "ccup_3_Revolute_31", "FOOT1": "thigh_3_Revolute_32",
+    "CCUP2": "base_link_Revolute_3", "THIGH2": "ccup_2_Revolute_28", "FOOT2": "thigh_2_Revolute_29",
+    "CCUP3": "base_link_Revolute_4", "THIGH3": "ccup_1_Revolute_25", "FOOT3": "thigh_1_Revolute_26",
+    "CCUP4": "base_link_Revolute_2", "THIGH4": "ccup_4_Revolute_34", "FOOT4": "thigh_4_Revolute_35",
+}
+
 
 
 class SerialBridgeLeg12(Node):
@@ -486,30 +593,30 @@ class SerialBridgeLeg12(Node):
 
         try:
             # -------- LEG 1 --------
-            ccup1  = math.degrees(msg.position[msg.name.index("CCUP1")]) +90
-            thigh1 = -math.degrees(msg.position[msg.name.index("THIGH1")]) +90
-            foot1  = -math.degrees(msg.position[msg.name.index("FOOT1")]) +90
+            ccup1  = math.degrees(msg.position[msg.name.index(JOINT["CCUP1"])]) +90
+            thigh1 = -math.degrees(msg.position[msg.name.index(JOINT["THIGH1"])]) +90
+            foot1  = -math.degrees(msg.position[msg.name.index(JOINT["FOOT1"])]) +90
 
             # -------- LEG 2 --------
-            ccup2  = math.degrees(msg.position[msg.name.index("CCUP2")]) +90
-            thigh2 = -math.degrees(msg.position[msg.name.index("THIGH2")]) +90
-            foot2  = math.degrees(msg.position[msg.name.index("FOOT2")]) +90
+            ccup2  = math.degrees(msg.position[msg.name.index(JOINT["CCUP2"])]) +90
+            thigh2 = -math.degrees(msg.position[msg.name.index(JOINT["THIGH2"])]) +90
+            foot2  = math.degrees(msg.position[msg.name.index(JOINT["FOOT2"])]) +90
 
             # -------- LEG 3 --------
-            ccup3  = -math.degrees(msg.position[msg.name.index("CCUP3")]) +90
-            thigh3 = -math.degrees(msg.position[msg.name.index("THIGH3")]) +90
-            foot3  = math.degrees(msg.position[msg.name.index("FOOT3")]) +90
+            ccup3  = -math.degrees(msg.position[msg.name.index(JOINT["CCUP3"])]) +90
+            thigh3 = -math.degrees(msg.position[msg.name.index(JOINT["THIGH3"])]) +90
+            foot3  = math.degrees(msg.position[msg.name.index(JOINT["FOOT3"])]) +90
 
             # -------- LEG 4 --------
-            ccup4  = -math.degrees(msg.position[msg.name.index("CCUP4")]) +90
-            thigh4 = -math.degrees(msg.position[msg.name.index("THIGH4")]) +90 
-            foot4  = -math.degrees(msg.position[msg.name.index("FOOT4")]) +90
+            ccup4  = -math.degrees(msg.position[msg.name.index(JOINT["CCUP4"])]) +90
+            thigh4 = -math.degrees(msg.position[msg.name.index(JOINT["THIGH4"])]) +90
+            foot4  = -math.degrees(msg.position[msg.name.index(JOINT["FOOT4"])]) +90
 
             # -------- CLAMP --------
             ccup1, thigh1, foot1 = self.clamp(ccup1), self.clamp(thigh1), self.clamp(foot1)
             ccup2, thigh2, foot2 = self.clamp(ccup2), self.clamp(thigh2), self.clamp(foot2)
             ccup3, thigh3, foot3 = self.clamp(ccup3), self.clamp(thigh3), self.clamp(foot3)
-            ccup4, thigh4, foot4 = self.clamp(ccup4), self.clamp(thigh4), self.clamp(foot4)           
+            ccup4, thigh4, foot4 = self.clamp(ccup4), self.clamp(thigh4), self.clamp(foot4)
 
             # -------- FORMAT --------
             # Order: L1 → L4
@@ -527,8 +634,11 @@ class SerialBridgeLeg12(Node):
             self.get_logger().info(f"Sent: {data.strip()}")
 
         except ValueError:
-            # Happens when joint names not yet published
-            pass
+            # A joint name was not found in /joint_states -> nothing is sent.
+            # Warn (at most every 2 s) instead of failing silently.
+            self.get_logger().warn(
+                f"Joint names not found in /joint_states, nothing sent. Got: {list(msg.name)}",
+                throttle_duration_sec=2.0)
 
 
 def main(args=None):

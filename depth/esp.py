@@ -568,11 +568,13 @@ class SerialBridgeLeg12(Node):
         super().__init__('serial_bridge_leg12')
 
         # -------- SERIAL SETUP --------
+        # ESP serial port; pass another with --ros-args -p port:=/dev/ttyACM0
+        port = self.declare_parameter('port', '/dev/ttyUSB0').value
         try:
-            self.ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
-            self.get_logger().info("✅ Serial connected")
+            self.ser = serial.Serial(port, 115200, timeout=1)
+            self.get_logger().info(f"✅ Serial connected on {port}")
         except Exception as e:
-            self.get_logger().error(f"❌ Serial error: {e}")
+            self.get_logger().error(f"❌ Serial error on {port}: {e}")
             self.ser = None
 
         # -------- SUBSCRIBER --------

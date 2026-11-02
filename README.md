@@ -8,8 +8,7 @@
   - [Workspace setup (first time)](#workspace-setup-first-time)
   - [Build and terminal setup](#build-and-terminal-setup)
   - [Simulation: mapping + Nav2 + frontier exploration](#simulation-mapping--nav2--frontier-exploration)
-  - [Real robot: camera mapping + Nav2](#real-robot-camera-mapping--nav2)
-  - [Real robot legs: Gazebo → ESP servos](#real-robot-legs-gazebo--esp-servos)
+  - [Real robot: Jetson + ESP + D435i](#real-robot-jetson--esp--d435i)
 - [1. Overview](#1-overview)
   - [1.1 At a glance](#11-at-a-glance)
 - [2. Running notes](#2-running-notes)
@@ -24,7 +23,7 @@
   - [7.1 Key navigation values](#71-key-navigation-values) · [7.2 Servers](#72-servers) · [7.3 Obstacle sensing](#73-obstacle-sensing-point-cloud) · [7.4 DWB controller](#74-dwb-controller-followpath) · [7.5 Costmaps](#75-costmaps) · [7.6 Frontier exploration](#76-frontier-exploration)
 - [8. Tuning reference](#8-tuning-reference)
   - [8.1 Verification commands](#81-verification-commands)
-- [9. Real robot (D435i depth camera)](#9-real-robot-d435i-depth-camera)
+- [9. Real robot (Jetson, D435i, ESP servos)](#9-real-robot-jetson-d435i-esp-servos)
   - [9.1 Real-mode notes](#91-real-mode-notes)
   - [9.2 Stereo IR mode (lower latency)](#92-stereo-ir-mode-lower-latency)
   - [9.3 Real robot dimensions](#93-real-robot-dimensions)
@@ -101,44 +100,146 @@ Start the terminals in this order:
 
 **Quadruped on its own (no rover):** `ros2 launch depth 2_gazebo.launch.py robot:=quadruped` spawns `urdf/quadruped.urdf` standing on the floor, facing +x. Move the legs with `ros2 run depth walk_gait` in a second terminal: it rises to the stand pose, `f` walks, `s` stands. RTAB-Map and Nav2 are not set up for it ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)).
 
-### Real robot: camera mapping + Nav2
+### Real robot: Jetson + ESP + D435i
 
-One-time setup: install the IMU filter:
+The real robot runs without Gazebo. A **Jetson Orin Nano Super** on the robot connects over USB to the ESP that drives the 12 leg servos and to the D435i depth camera. The laptop connects to the Jetson over SSH and shows RViz. Everything except RViz runs on the Jetson: the camera images are too heavy to send over Wi-Fi, and the gait keeps walking if the Wi-Fi drops.
 
-```bash
-sudo apt install ros-humble-imu-filter-madgwick
+```text
+Jetson:  walk_gait real:=true --/joint_states--> esp --USB serial--> ESP --> 12 servos
+                                            \--> robot_state_publisher --> leg TF
+         D435i --> real_sensors --> RTAB-Map --> Nav2
+Laptop:  SSH terminals + RViz (same ROS_DOMAIN_ID, same network)
 ```
 
-Start the terminals in this order:
+**One-time setup on the Jetson**
 
-| Terminal | Command | Notes |
+1. Ubuntu 22.04 (JetPack 6) with ROS 2 Humble. Set up the workspace exactly as in [Workspace setup](#workspace-setup-first-time): this repository in `~/depth_mapping/src/depth`, RTAB-Map 0.23 in `~/rtabmap_ws`, `rosdep install`, then [build](#build-and-terminal-setup). Gazebo is not needed on the Jetson.
+2. Serial port access for `esp`, then log out and in again:
+   ```bash
+   sudo usermod -aG dialout $USER
+   ```
+3. Check the ESP's port with `ls /dev/ttyUSB* /dev/ttyACM*` (default `/dev/ttyUSB0`).
+4. Use the same `ROS_DOMAIN_ID` on the Jetson and the laptop (the default, 0, is fine), on the same network. Do not run Gazebo on that domain at the same time: its `/joint_states`, camera topics and TF would mix with the real robot's.
+
+The laptop needs this package built too (as in [Build](#build-and-terminal-setup)): RViz loads the robot meshes from its own install.
+
+**Every terminal**, Jetson and laptop:
+
+```bash
+cd ~/depth_mapping
+source ~/rtabmap_ws/install/setup.bash
+source install/setup.bash
+```
+
+**Run, in this order** (Jetson terminals are SSH sessions from the laptop: `ssh <user>@<jetson-ip>`):
+
+| # | Where | Command | Notes |
+| --- | --- | --- | --- |
+| **1. Robot + ESP + camera** | Jetson | `ros2 launch depth real_robot.launch.py camera:=true` | robot_state_publisher (`quadruped.urdf`), `esp`, and the D435i (`real_sensors.launch.py`). Legs only: leave out `camera:=true`. ESP on another port: add `port:=/dev/ttyACM0`. Prints `Serial connected on …` |
+| **2. Gait** | Jetson | `ros2 run depth walk_gait --ros-args -p real:=true` | **Hold the robot.** The servos go to 90° (zero pose), then stand up in about 1.4 s. Type `f` to walk, `s` to stand |
+| **3. RViz** | Laptop | `rviz2 -d /opt/ros/humble/share/nav2_bringup/rviz/nav2_default_view.rviz` | Fixed Frame `base_link` (legs only) or `map` (with RTAB-Map). Add **RobotModel** (Description Topic `/robot_description`) and **TF**; Map display topic `/rtabmap/map` |
+| **4. RTAB-Map** | Jetson | `ros2 launch depth rtabmap.launch.py mode:=real rtabmap_viz:=false` | After the camera stream is up. `rtabmap_viz:=false` because SSH has no display |
+| **5. Nav2** | Jetson | `ros2 launch depth nav2.launch.py mode:=real` | After `/rtabmap/map` appears. Plans and builds costmaps, but cannot move the legs yet: walk_gait does not read `/cmd_vel` ([section 10.1](#101-open-issues)) |
+
+- **Camera options** (`camera_mode:=stereo`, `cam_*`, `base_height`, …) go straight on step 1, next to `camera:=true`; see [Launch arguments](#launch-arguments-real-robot). Stereo mode needs `camera_mode:=stereo` on step 4 too ([section 9.2](#92-stereo-ir-mode-lower-latency)).
+- **Checks:** `ros2 topic hz /joint_states` shows about 20 Hz; the step 1 terminal prints a `Sent: …` line for every message; `ros2 topic hz /camera/camera/color/image_raw` (RGB-D) or `/camera/camera/infra1/image_rect_raw` (stereo) shows the camera rate.
+- **Stopping:** type `s`, support the robot, then Ctrl+C walk_gait. The servos hold their last angle until step 1 stops.
+
+#### Connecting to the Jetson
+
+Once, with a screen on the Jetson or from the router's device list, find its IP address:
+
+```bash
+hostname -I                          # on the Jetson: first address, e.g. 192.168.1.42
+```
+
+From the laptop:
+
+| What | Command | Notes |
 | --- | --- | --- |
-| **1. Camera + TF** | `ros2 launch depth real_sensors.launch.py` | Defaults are the quadruped.urdf mount; override `cam_*` / `base_height` if the real robot differs ([section 9.3](#93-real-robot-dimensions)). Lower latency: add `camera_mode:=stereo` here and in terminal 2 ([section 9.2](#92-stereo-ir-mode-lower-latency)) |
-| **2. RTAB-Map** | `ros2 launch depth rtabmap.launch.py mode:=real` | After the camera stream is up |
-| **3. Nav2** | `ros2 launch depth nav2.launch.py mode:=real` | After `/rtabmap/map` appears. Exploration is off here (`explore:=auto`); `explore:=true` turns it on (untested, see below) |
-| **4. RViz2** | `rviz2 -d /opt/ros/humble/share/nav2_bringup/rviz/nav2_default_view.rviz` | Set the Map display topic to `/rtabmap/map` |
+| **Check the Jetson is reachable** | `ping <jetson-ip>` | Laptop and Jetson on the same Wi-Fi |
+| **Log in without a password** (once) | `ssh-copy-id <user>@<jetson-ip>` | Then `ssh` no longer asks for the password |
+| **Open a Jetson terminal** | `ssh <user>@<jetson-ip>` | One per Jetson step, or one with tmux (next row) |
+| **Keep the robot running if Wi-Fi drops** | On the Jetson: `tmux new -s robot`. New window `Ctrl+b c`, next window `Ctrl+b n`, detach `Ctrl+b d`. After reconnecting: `tmux attach -t robot` | Without tmux, a dropped SSH session stops every command started in it, walk_gait included. Install with `sudo apt install tmux` |
+| **Same ROS domain on both** | `echo $ROS_DOMAIN_ID` on both (empty = 0). To set it: `echo 'export ROS_DOMAIN_ID=0' >> ~/.bashrc`, then open a new terminal | Must match, or the laptop sees no topics |
+| **Check ROS traffic both ways** | Jetson: `ros2 run demo_nodes_cpp talker`; laptop: `ros2 run demo_nodes_cpp listener` | The listener prints `I heard: …`. If not: firewall (`sudo ufw disable` on both to test) or a network that blocks multicast |
+| **Check the clocks match** | `date` on both; `timedatectl` shows `System clock synchronized: yes` | A few seconds apart and RViz drops the Jetson's TF (`extrapolation into the future`) |
+| **Check the hardware** (Jetson) | `ls /dev/ttyUSB* /dev/ttyACM*` (ESP port); `rs-enumerate-devices -s` (D435i) | Pass the ESP port as `port:=…` in step 1 |
+| **Update the code** (Jetson) | `cd ~/depth_mapping/src/depth && git pull && cd ~/depth_mapping && colcon build --packages-select depth` | Then re-source (`source install/setup.bash`) in every terminal |
+| **Copy a map to the laptop** | `scp <user>@<jetson-ip>:~/.ros/rtabmap_real.db .` | The real-mode RTAB-Map database; deleted on the next start unless `delete_db:=false` |
+
+#### Launch arguments (real robot)
+
+Pass them as `name:=value` after the launch file, e.g. `ros2 launch depth real_robot.launch.py camera:=true camera_mode:=stereo port:=/dev/ttyACM0`. Node parameters go after `--ros-args -p`.
+
+**`real_robot.launch.py`** (step 1):
+
+| Argument | Default | What it does |
+| --- | --- | --- |
+| `port` | `/dev/ttyUSB0` | ESP serial port for `esp` |
+| `camera` | `false` | `true`: also start the D435i (`real_sensors.launch.py`) |
+| `rviz` | `false` | `true`: also open RViz on this machine (not over SSH) |
+| All `real_sensors.launch.py` arguments below | | Passed on to the camera when `camera:=true` |
+
+**`real_sensors.launch.py`** (the camera; through step 1 with `camera:=true`, or on its own):
+
+| Argument | Default | What it does |
+| --- | --- | --- |
+| `camera_mode` | `rgbd` | `rgbd`: colour + aligned depth. `stereo`: the two IR images, lower latency ([section 9.2](#92-stereo-ir-mode-lower-latency)). Use the same value on RTAB-Map |
+| `emitter` | `0` | Stereo only: IR dot projector, `0` off (better odometry), `1` on (better depth on plain walls) |
+| `infra_fps` | `30` | Stereo only: IR and depth frame rate (6, 15, 30, 60, 90) |
+| `use_imu` | `true` (if `imu_filter_madgwick` is installed) | Camera IMU through the Madgwick filter on `/imu/data`. Use the same value on RTAB-Map |
+| `cam_x`, `cam_y`, `cam_z` | `0.167`, `0.0`, `0.013` | Camera position from `base_link` (body centre), metres ([section 9.3](#93-real-robot-dimensions)) |
+| `cam_roll`, `cam_pitch`, `cam_yaw` | `0.0` | Camera angle, radians; pitch positive = tilted down |
+| `base_height` | `0.19` | `base_link` above the floor (stand pose) |
+
+**`rtabmap.launch.py`** (step 4):
+
+| Argument | Default | What it does |
+| --- | --- | --- |
+| `mode` | `sim` | `real` for the robot |
+| `camera_mode` | `rgbd` | Same as the camera's `camera_mode` |
+| `use_imu` | `true` | Same as the camera's `use_imu` |
+| `rtabmap_viz` | `true` | `false` over SSH (no display) |
+| `localization` | `false` | `true`: localize on the saved map instead of mapping |
+| `delete_db` | `true` | `false`: keep the previous map and continue it |
+
+**`nav2.launch.py`** (step 5):
+
+| Argument | Default | What it does |
+| --- | --- | --- |
+| `mode` | `sim` | `real` for the robot |
+| `explore` | `auto` | Frontier exploration: `auto` (off in real mode), `true`, `false` |
+
+**Node parameters:**
+
+| Node | Parameter | Default | What it does |
+| --- | --- | --- | --- |
+| `walk_gait` | `real` | `false` | `true`: real robot, publishes `/joint_states` (`ros2 run depth walk_gait --ros-args -p real:=true`) |
+| `esp` | `port` | `/dev/ttyUSB0` | ESP serial port, when `esp` runs on its own (`ros2 run depth esp --ros-args -p port:=/dev/ttyACM0`) |
+
+Examples:
+
+```bash
+# Stereo camera, ESP on /dev/ttyACM0
+ros2 launch depth real_robot.launch.py camera:=true camera_mode:=stereo port:=/dev/ttyACM0
+ros2 launch depth rtabmap.launch.py mode:=real camera_mode:=stereo rtabmap_viz:=false
+
+# Camera tilted 10° down; continue the last map
+ros2 launch depth real_robot.launch.py camera:=true cam_pitch:=0.1745
+ros2 launch depth rtabmap.launch.py mode:=real rtabmap_viz:=false delete_db:=false
+```
 
 > **Real robot status**
-> - **Tested:** the real D435i depth camera with RTAB-Map mapping and the Nav2 costmaps, with the camera held in the hand. Nav2 is set up for real mode (`config/nav2_params_real.yaml`).
-> - **Not tested yet:** Nav2 driving the actual robot and frontier exploration (`explore:=true`) with the real camera on the robot. `nav2_params_real.yaml` also still lacks the exploration settings ([section 10.1](#101-open-issues)).
-
-### Real robot legs: Gazebo → ESP servos
-
-The real legs copy the simulated quadruped: `esp` sends the Gazebo joint angles over USB serial to the ESP that drives the 12 servos. Connect the ESP (`/dev/ttyUSB0`), then start the terminals in this order:
-
-| Terminal | Command | Notes |
-| --- | --- | --- |
-| **1. Gazebo + robot** | `ros2 launch depth 2_gazebo.launch.py robot:=quadruped` | Leave out `robot:=` for the rover version; the legs are the same |
-| **2. ESP bridge** | `ros2 run depth esp` | Prints `Serial connected`, then a `Sent: …` line for every `/joint_states` message (100 Hz) |
-| **3. Gait** | `ros2 run depth walk_gait` | Rises to the stand pose in about 1.4 s; `f` walks, `s` stands |
-
-> **Hold or prop up the robot on the first run.** The servos move as soon as `esp` starts: first to the Gazebo pose (all joints 0 = 90° on the servos), then to the stand pose. The real robot copies what the simulated legs actually do, including lag or a fall in Gazebo. Details: [section 9.4](#94-real-robot-legs-esp-servo-bridge).
+> - **Tested:** the D435i with RTAB-Map mapping and the Nav2 costmaps, with the camera held in the hand (laptop only). The real servos following Gazebo's legs through `esp` (1 Nov 2026).
+> - **Tested without hardware** (laptop, 2 Nov 2026): `real_robot.launch.py` with and without `camera:=true`, and `walk_gait real:=true` driving the leg TF to the stand pose.
+> - **Not tested yet:** the Jetson setup, `walk_gait real:=true` moving the real servos, mapping with the camera mounted on the robot, Nav2 driving the robot, and frontier exploration (`explore:=true`).
 
 ---
 
 ## 1. Overview
 
-`depth` is a ROS 2 Humble package that simulates a wheeled rover in Gazebo Classic, maps a maze with RTAB-Map using a depth camera, and navigates it autonomously with Nav2. By default a frontier exploration node drives the rover to the edges of the known map until the maze is mapped ([section 7.6](#76-frontier-exploration)); with exploration off, a 2D Goal Pose in RViz drives it through the maze without collisions; map quality is still being tuned (see [section 10](#10-known-issues-and-next-steps)). `robot:=quadruped` spawns the quadruped alone, without the rover, for leg tests ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)). Mapping and Nav2 also run on a real Intel RealSense D435i depth camera ([section 9](#9-real-robot-d435i-depth-camera)); Nav2 and frontier exploration on the real robot are not tested yet.
+`depth` is a ROS 2 Humble package that simulates a wheeled rover in Gazebo Classic, maps a maze with RTAB-Map using a depth camera, and navigates it autonomously with Nav2. By default a frontier exploration node drives the rover to the edges of the known map until the maze is mapped ([section 7.6](#76-frontier-exploration)); with exploration off, a 2D Goal Pose in RViz drives it through the maze without collisions; map quality is still being tuned (see [section 10](#10-known-issues-and-next-steps)). `robot:=quadruped` spawns the quadruped alone, without the rover, for leg tests ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)). The real robot runs without Gazebo on a Jetson Orin Nano Super: the gait drives the 12 servos through an ESP, and mapping and Nav2 run on a real Intel RealSense D435i depth camera ([section 9](#9-real-robot-jetson-d435i-esp-servos)); Nav2 and frontier exploration on the real robot are not tested yet.
 
 ### 1.1 At a glance
 
@@ -164,7 +265,7 @@ The commands are in [Start here](#start-here-run-the-bot) at the beginning of th
 - To drive with **2D Goal Pose** in RViz instead, start Nav2 with `ros2 launch depth nav2.launch.py explore:=false`.
 - In teleop, `q` / `z` raise / lower speed by 10%; the start values are not a hard cap.
 - RTAB-Map deletes `~/.ros/rtabmap.db` on every start, so each run maps from scratch.
-- Real-robot details are in [section 9](#9-real-robot-d435i-depth-camera).
+- Real-robot details are in [section 9](#9-real-robot-jetson-d435i-esp-servos).
 
 ---
 
@@ -179,6 +280,7 @@ All launch, config, URDF, mesh and world files are installed to `install/depth/s
 | `launch/rtabmap.launch.py` | Includes `rtabmap_launch/rtabmap.launch.py` with topics, frames and RTAB-Map parameters; `mode:=sim` (default) or `mode:=real` |
 | `launch/nav2.launch.py` | Includes Nav2 `navigation_launch.py` with `config/nav2_params.yaml` (sim) or `config/nav2_params_real.yaml` (`mode:=real`), and starts `frontier_explorer` (`explore:=auto`: on in sim, off in real) |
 | `launch/real_sensors.launch.py` | Real robot: D435i driver, Madgwick IMU filter, static TFs, downsampled obstacle cloud |
+| `launch/real_robot.launch.py` | Real robot, no Gazebo: robot_state_publisher (`quadruped.urdf`) and `esp`; `camera:=true` adds `real_sensors.launch.py` (its arguments pass through), `port:=` sets the ESP port, `rviz:=true` opens RViz ([section 9.4](#94-real-robot-legs-esp-servo-bridge)) |
 | `launch/display.launch.py` | RViz-only model view (robot_state_publisher + RViz, no joint state source) |
 | **Config** | |
 | `config/nav2_params.yaml` | DWB controller, goal checker, global and local costmaps |
@@ -192,8 +294,8 @@ All launch, config, URDF, mesh and world files are installed to `install/depth/s
 | `worlds/maze.world` | The maze used by `2_gazebo.launch.py` |
 | **Nodes** | |
 | `depth/frontier_explorer.py` | Frontier exploration node (`ros2 run depth frontier_explorer`); parameters have built-in defaults, see [section 7.6](#76-frontier-exploration) |
-| `depth/walk_gait.py` | Leg gait (`ros2 run depth walk_gait`): holds the stand pose, `f` walks, `s` stands; 12 joint angles on `/joint_group_controller/commands` at 20 Hz, each joint moving at most 1 rad/s ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)). Older versions are kept commented out at the top of the file |
-| `depth/esp.py` | Serial bridge to the real servos (`ros2 run depth esp`): `/joint_states` → 12 servo angles on `/dev/ttyUSB0` ([section 9.4](#94-real-robot-legs-esp-servo-bridge)). Older versions are kept commented out at the top of the file |
+| `depth/walk_gait.py` | Leg gait (`ros2 run depth walk_gait`): holds the stand pose, `f` walks, `s` stands; 12 joint angles at 20 Hz, each joint moving at most 1 rad/s. Gazebo: on `/joint_group_controller/commands`; `real:=true`: on `/joint_states` ([section 4.5](#45-quadruped-alone-urdfquadrupedurdf)). Older versions are kept commented out at the top of the file |
+| `depth/esp.py` | Serial bridge to the real servos (started by `real_robot.launch.py`, or `ros2 run depth esp`): `/joint_states` → 12 servo angles on the serial port (`port` parameter, default `/dev/ttyUSB0`) ([section 9.4](#94-real-robot-legs-esp-servo-bridge)). Older versions are kept commented out at the top of the file |
 | `depth/cal_servo.py` | Old servo calibration test (`ros2 run depth cal_servo`). Still uses the old model's joint names (`CCUP1`, `THIGH1`, `FOOT1`, …), so it sends nothing with the current model |
 | **Other** | |
 | `depth/__init__.py` | Python package marker |
@@ -285,11 +387,11 @@ Physics settings, only in `quadruped.urdf` (the rover's legs never touch the flo
 
 | Setting | Value | Why |
 | --- | --- | --- |
-| **Leg command interface** | `position_pid`, `pos_kp` 20, `pos_kd` 0.5 | Gazebo turns each position command into joint torque, torque = 20 × (target − angle) − 0.5 × speed. Plain `position` teleports the joints every step, and the robot exploded once its feet touched the floor. The controller still uses the position interface, so the topic and `controllers.yaml` are unchanged |
+| **Leg command interface** | `position_pid`, `pos_kp` 60, `pos_kd` 1.5 | Gazebo turns each position command into joint torque, torque = 60 × (target − angle) − 1.5 × speed. Plain `position` teleports the joints every step, and the robot exploded once its feet touched the floor. The controller still uses the position interface, so the topic and `controllers.yaml` are unchanged |
 | **`hold_joints`** | false (gazebo_ros2_control plugin) | Otherwise the joints are locked at zero speed until the controller starts, which threw the robot around when it landed |
 | **Feet** (`foot_1`–`foot_4`) | `mu1 = mu2 = 1.0`, `kp 1e5`, `kd 100`, `minDepth 0.001`, `maxVel 0` | Without them the feet jitter on the floor and the robot slides about 5 mm/s while standing |
 
-**walk_gait** (`depth/walk_gait.py`) publishes the 12 joint angles on `/joint_group_controller/commands` at 20 Hz, in the order of the table in [section 4.2](#42-links-and-joints). It is the gait from the Gazebo Harmonic version of this robot, with the Classic joint names; the two models have the same joints. walk_gait works with both robots; on the rover the legs only swing.
+**walk_gait** (`depth/walk_gait.py`) publishes the 12 joint angles at 20 Hz, in the order of the table in [section 4.2](#42-links-and-joints). It is the gait from the Gazebo Harmonic version of this robot, with the Classic joint names; the two models have the same joints. walk_gait works with both robots; on the rover the legs only swing.
 
 | Part | How it works |
 | --- | --- |
@@ -297,9 +399,10 @@ Physics settings, only in `quadruped.urdf` (the rover's legs never touch the flo
 | **Inverse kinematics** | Closed-form 3-joint leg solution (`IK_left`, `IK_right`) with link lengths `L1` 0.050, `L2` 0.135, `L3` 0.1575 m |
 | **Foot path** | Four points per leg, `step_time` 0.5 s each (2 s cycle): centre → back (`step_length` 0.010 m) → lifted (`step_height` 0.010 m) → front → centre |
 | **Leg timing** | Diagonal pairs half a cycle apart (`phase_offsets` `[0, 2, 0, 2]`): back-right with front-left, back-left with front-right |
-| **Speed limit** | Each joint moves at most `max_joint_speed` (1.0 rad/s) towards its target, starting from the angles of the first `/joint_states` message. The robot rises to the stand pose in about 1.4 s, and `f` / `s` blend in over about 0.3 s instead of jumping. Jumping straight to the stand pose made the legs kick and flipped the robot |
+| **Output** | Gazebo (default): `/joint_group_controller/commands`. `real:=true` (real robot, no Gazebo): `/joint_states`, read by `esp` and robot_state_publisher ([section 9.4](#94-real-robot-legs-esp-servo-bridge)) |
+| **Speed limit** | Each joint moves at most `max_joint_speed` (1.0 rad/s) towards its target, starting from the angles of the first `/joint_states` message (Gazebo) or from the zero pose (`real:=true`, as the servos do not report their angles). The robot rises to the stand pose in about 1.4 s, and `f` / `s` blend in over about 0.3 s instead of jumping. Jumping straight to the stand pose made the legs kick and flipped the robot |
 
-walk_gait waits for `/joint_states` before it publishes anything, so Gazebo has to be running.
+In Gazebo mode, walk_gait waits for `/joint_states` before it publishes anything, so Gazebo has to be running.
 
 **Test status:** the quadruped spawns level at the spawn point and stands without drifting (about 2° roll). With `esp` running, the real servos follow the simulated legs through stand-up and walking (tested 1 Nov 2026). How far and how straight the current gait walks in Gazebo has not been measured yet.
 
@@ -393,7 +496,7 @@ All nodes run on simulation time (`/clock` from Gazebo).
 | `/imu/data` | Imu | IMU plugin | Not used yet |
 | `/odom` | Odometry | diff_drive (ground truth) | RTAB-Map, Nav2 controller, velocity smoother |
 | **Robot state** | | | |
-| `/joint_states` | JointState | joint_state_broadcaster | robot_state_publisher; walk_gait (first message only); esp (real servos) |
+| `/joint_states` | JointState | joint_state_broadcaster (Gazebo); walk_gait `real:=true` (real robot) | robot_state_publisher; walk_gait (Gazebo, first message only); esp (real servos) |
 | `/joint_group_controller/commands` | Float64MultiArray | walk_gait (optional) | joint_group_controller (leg joint positions) |
 | `/robot_description` | String | robot_state_publisher | spawn_entity, RViz |
 | `/tf`, `/tf_static` | TFMessage | robot_state_publisher, diff_drive, RTAB-Map | All nodes |
@@ -649,13 +752,13 @@ ros2 topic delay /rtabmap/map                                  # map update lag
 
 ---
 
-## 9. Real robot (D435i depth camera)
+## 9. Real robot (Jetson, D435i, ESP servos)
 
-The same RTAB-Map and Nav2 launch files take `mode:=real` (default `mode:=sim`, unchanged); `real_sensors.launch.py` provides what Gazebo provides in simulation. The sim's URDF, Gazebo and TF setup are not used. The commands are under [Start here → Real robot](#real-robot-camera-mapping--nav2).
+The real robot runs without Gazebo, on a Jetson Orin Nano Super. `real_robot.launch.py` starts the robot model and the ESP servo bridge ([section 9.4](#94-real-robot-legs-esp-servo-bridge)), and `real_sensors.launch.py` provides the camera, IMU and TF that Gazebo provides in simulation. The same RTAB-Map and Nav2 launch files take `mode:=real` (default `mode:=sim`, unchanged). The commands, and which machine runs each, are under [Start here → Real robot](#real-robot-jetson--esp--d435i).
 
-**Tested:** the real depth camera, held in the hand, with RTAB-Map building the map and the Nav2 costmaps building from real depth data. Nav2 runs in real mode with its own parameters (`config/nav2_params_real.yaml`).
+**Tested:** the real depth camera, held in the hand, with RTAB-Map building the map and the Nav2 costmaps building from real depth data. Nav2 runs in real mode with its own parameters (`config/nav2_params_real.yaml`). The real servos following Gazebo's legs through `esp`.
 
-**Not tested yet:** Nav2 driving the actual robot to a goal, and frontier exploration, with the real camera mounted on the robot.
+**Not tested yet:** the Jetson setup, `walk_gait real:=true` on the real servos, mapping with the camera mounted on the robot, Nav2 driving the robot to a goal, and frontier exploration.
 
 ### 9.1 Real-mode notes
 
@@ -668,7 +771,7 @@ The same RTAB-Map and Nav2 launch files take `mode:=real` (default `mode:=sim`, 
 
 ### 9.2 Stereo IR mode (lower latency)
 
-`camera_mode:=stereo` (default `rgbd`) runs RTAB-Map on the D435i's two global-shutter IR images instead of colour + aligned depth. The driver skips depth alignment and the colour stream, and RTAB-Map uses `stereo_sync` + `stereo_odometry`. Add `camera_mode:=stereo` to terminals 1 and 2 under [Start here → Real robot](#real-robot-camera-mapping--nav2) (always both). Nav2 and RViz are unchanged.
+`camera_mode:=stereo` (default `rgbd`) runs RTAB-Map on the D435i's two global-shutter IR images instead of colour + aligned depth. The driver skips depth alignment and the colour stream, and RTAB-Map uses `stereo_sync` + `stereo_odometry`. Start the camera with `camera_mode:=stereo` (`real_robot.launch.py camera:=true camera_mode:=stereo`, or `real_sensors.launch.py camera_mode:=stereo`) and RTAB-Map with `camera_mode:=stereo` (always both), as under [Start here → Real robot](#real-robot-jetson--esp--d435i). Nav2 and RViz are unchanged.
 
 - **`emitter`** (stereo only, default `0`): the IR dot projector moves with the camera and creates fake features for stereo odometry, so it is off by default (via `config/realsense_emitter_off.yaml`). Without it the depth on plain, textureless walls gets sparser, which weakens `/camera/obstacle_cloud` for Nav2. Use `emitter:=1` if obstacles get missed.
 - **`infra_fps`** (stereo only, default `30`): IR and depth frame rate.
@@ -691,13 +794,20 @@ Check: the footprint outline in RViz matches the robot, and `ros2 run tf2_ros tf
 
 ### 9.4 Real robot legs (ESP servo bridge)
 
-`esp` (`depth/esp.py`) makes the real legs copy the simulated ones. It reads `/joint_states` from Gazebo and writes one line of 12 servo angles per message to the ESP. The commands are under [Start here → Real robot legs](#real-robot-legs-gazebo--esp-servos). It is the bridge from the Gazebo Harmonic version of this robot, with the Classic joint names.
+`esp` (`depth/esp.py`) sends the leg angles to the ESP that drives the 12 servos. It reads `/joint_states` and writes one line of 12 servo angles per message. `real_robot.launch.py` starts it on the Jetson; the commands are under [Start here → Real robot](#real-robot-jetson--esp--d435i). It is the bridge from the Gazebo Harmonic version of this robot, with the Classic joint names.
+
+Two sources for `/joint_states`:
+
+| Setup | Publisher | Rate | Commands |
+| --- | --- | --- | --- |
+| **Real robot (normal)** | `walk_gait --ros-args -p real:=true` on the Jetson; no Gazebo | 20 Hz | [Start here → Real robot](#real-robot-jetson--esp--d435i) |
+| **Copy Gazebo** (laptop with the ESP plugged in) | Gazebo's joint_state_broadcaster: the real legs copy the simulated ones, including slips or falls | 100 Hz | `ros2 launch depth 2_gazebo.launch.py robot:=quadruped`, `ros2 run depth esp`, `ros2 run depth walk_gait` |
 
 | Item | Value |
 | --- | --- |
-| **Serial** | `/dev/ttyUSB0`, 115200 baud. If the port does not open, `esp` logs a serial error and sends nothing |
+| **Serial** | `port` parameter (default `/dev/ttyUSB0`; `real_robot.launch.py port:=…` or `ros2 run depth esp --ros-args -p port:=…`), 115200 baud. If the port does not open, `esp` logs a serial error and sends nothing |
 | **Line format** | 12 space-separated angles in degrees, 2 decimals, ending in a newline, in the order leg 1 → leg 4, each leg hip, thigh, foot |
-| **Rate** | One line per `/joint_states` message, 100 Hz (`update_rate` in `config/controllers.yaml`) |
+| **Rate** | One line per `/joint_states` message: 20 Hz from walk_gait `real:=true`, 100 Hz from Gazebo |
 | **Missing joints** | If the joint names are not in `/joint_states`, nothing is sent and `esp` warns every 2 s |
 
 Each angle is `±degrees(joint angle) + 90`, so the URDF zero pose is 90° on every servo. The signs match how each servo is mounted:
@@ -722,7 +832,8 @@ Each angle is `±degrees(joint angle) + 90`, so the URDF zero pose is 90° on ev
 | `FOOT4` | `thigh_4_Revolute_35` | −deg + 90 |
 
 - **No clamp:** the 0–180° clamp is turned off, so an angle outside the servo range goes straight to the ESP.
-- **Gazebo is needed:** `esp` copies the simulation, so it sends nothing unless Gazebo publishes `/joint_states`.
+- **Something must publish `/joint_states`:** walk_gait with `real:=true`, or Gazebo. Never both on the same ROS domain.
+- **Start pose:** the servos do not report their angles, so walk_gait `real:=true` starts from the zero pose (all servos at 90°). The servos jump there at full speed, then stand up at 1 rad/s.
 - **Only one serial user:** `esp` and `cal_servo` both open `/dev/ttyUSB0`; run one at a time.
 
 ---
@@ -741,9 +852,11 @@ Each angle is `±degrees(joint angle) + 90`, so the URDF zero pose is 90° on ev
 - **Depth rays leak past walls**, marking free cells on the far side. Exploration ignores those not connected to the robot, and blacklists the rest after one visit.
 - **Frontier exploration not yet confirmed end to end:** no complete run to `Exploration complete` with the current settings (see [section 7.6](#76-frontier-exploration)). Blacklists are stored by position, and nothing caps the total attempts or run time, so a frontier whose centre moves more than 0.5 m could be retried.
 - **Real robot: Nav2 driving and frontier exploration not tested yet** with the real camera on the robot; so far the camera was tested held in the hand.
+- **Real robot: Nav2 cannot move the legs yet.** Nav2 publishes `/cmd_vel`, but walk_gait only takes `f` / `s` from the keyboard; it needs to turn `/cmd_vel` into steps before Nav2 or exploration can drive the robot.
+- **Real robot: the Jetson setup and `walk_gait real:=true` are not tested on the hardware yet** (only on the laptop, without the ESP).
 - **Real robot: dimensions come from quadruped.urdf, not measured on the robot.** Camera mount (`cam_x` 0.167, `cam_z` 0.013), `base_height` 0.19 (STAND) and the footprint (covers both the zero pose and STAND); check them on the robot and trim the footprint once the standing pose is fixed ([section 9.3](#93-real-robot-dimensions)).
 - **Quadruped alone (`robot:=quadruped`):** how far and how straight the current gait walks in Gazebo has not been measured yet. Standing up from the spawn pose can shift the robot by a few to tens of centimetres. There is no `/odom` or IMU, so RTAB-Map and Nav2 cannot run with it.
-- **Real legs only copy the simulation.** `esp` needs Gazebo running, and the servos follow whatever the simulated legs do, including slips or falls. Its 0–180° clamp is off ([section 9.4](#94-real-robot-legs-esp-servo-bridge)).
+- **No servo clamp.** `esp`'s 0–180° clamp is off, so an out-of-range angle goes straight to the ESP ([section 9.4](#94-real-robot-legs-esp-servo-bridge)).
 - **`cal_servo.py` uses the old joint names** (`CCUP1`, …), so it sends nothing with the current model.
 - **Real Nav2 config lacks the exploration settings** (`always_send_full_costmap`, progress allowance, behavior_server `transform_tolerance`), and frontier parameters exist only as code defaults, in neither params file.
 
@@ -756,9 +869,12 @@ Each angle is `±degrees(joint angle) + 90`, so the URDF zero pose is 90° on ev
 | Quadruped jumps and falls when walk_gait starts | Legs commanded straight to a far pose | walk_gait's `max_joint_speed` (1 rad/s) |
 | Quadruped slides while standing | No foot contact settings | Keep the `foot_1`–`foot_4` contact blocks in `quadruped.urdf` |
 | Edits have no effect | Launch files and nodes run from `install/` | `colcon build --packages-select depth`, then `source install/setup.bash` and restart |
-| `esp` prints `Serial connected` but no `Sent:` lines, and the real legs do not move | Old `esp` still installed (old joint names), or Gazebo not running | Rebuild, re-source and restart `esp`; check `ros2 topic hz /joint_states` |
+| `esp` prints `Serial connected` but no `Sent:` lines, and the real legs do not move | Nothing publishes `/joint_states` (walk_gait not started with `real:=true`, or Gazebo not running), or an old `esp` still installed | Start walk_gait with `--ros-args -p real:=true`; rebuild and re-source; check `ros2 topic hz /joint_states` |
 | `esp` logs a serial error | ESP on another port, or no permission | `ls /dev/ttyUSB*`; add your user to `dialout` (`sudo usermod -aG dialout $USER`, then log in again) |
-| walk_gait prints `ready` but the legs never move | No `/joint_states` yet (Gazebo not running) | Start Gazebo first |
+| walk_gait prints `ready (Gazebo)` but the legs never move | Gazebo mode without Gazebo running | On the real robot use `--ros-args -p real:=true`; in simulation start Gazebo first |
+| RViz on the laptop shows no robot, or no meshes | Different `ROS_DOMAIN_ID` or network, or the package is not built on the laptop | Same `ROS_DOMAIN_ID` on both; `ros2 topic list` on the laptop should show `/robot_description`; build the package on the laptop |
+| RTAB-Map over SSH exits with a display error | rtabmap_viz needs a screen | `rtabmap_viz:=false` |
+| Real legs twitch between two poses | Gazebo and walk_gait `real:=true` both publish `/joint_states` | Stop Gazebo, or use another `ROS_DOMAIN_ID` for it |
 | Rover spins, tilts or slides | Wheels lost grip; castors carrying the weight | Keep castor collision radius below wheel radius |
 | Ring of obstacles ~2 m around the robot | Floor points in the costmap | `min_obstacle_height` above the floor in `map` / `odom` |
 | Doubled, rotated walls in the map | Wrong loop closures or proximity links | Check `tf2_echo map odom`; see [section 6](#6-mapping-configuration-rtab-map) |
@@ -772,6 +888,8 @@ Each angle is `±degrees(joint angle) + 90`, so the URDF zero pose is 90° on ev
 
 **Next: Nav2 and frontier exploration on the real robot with the real depth camera**
 
+- [ ] Set up the Jetson and test `real_robot.launch.py` + `walk_gait real:=true` on the real servos
+- [ ] Make walk_gait follow `/cmd_vel`, so Nav2 can drive the legs
 - [ ] Check the camera mount, base height and footprint on the real robot ([section 9.3](#93-real-robot-dimensions))
 - [ ] Add the exploration settings missing from `nav2_params_real.yaml` (`always_send_full_costmap`, progress allowance, behavior_server `transform_tolerance`)
 - [ ] Test Nav2 goals (2D Goal Pose) on the real robot with the camera mounted

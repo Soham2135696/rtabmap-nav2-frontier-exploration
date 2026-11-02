@@ -367,6 +367,7 @@ import math
 import threading
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
@@ -424,17 +425,27 @@ class QuadCrawl(Node):
             0.0, -1.4002, -0.46137   # FR
         ]
 
-        self.publisher = self.create_publisher(
-            Float64MultiArray,
-            '/joint_group_controller/commands',
-            10
-        )
+        # real:=false (default): Gazebo. Commands go to the leg controller, and the
+        #   first /joint_states message (from Gazebo) gives the start angles.
+        # real:=true: real robot, no Gazebo. The angles are published directly on
+        #   /joint_states (read by esp.py and robot_state_publisher), starting from
+        #   the zero pose (all servos at 90 degrees).
+        self.real = self.declare_parameter('real', False).value
+
+        if self.real:
+            self.publisher = self.create_publisher(JointState, '/joint_states', 10)
+            self.last_command = [0.0] * len(self.joint_names)
+        else:
+            self.publisher = self.create_publisher(
+                Float64MultiArray,
+                '/joint_group_controller/commands',
+                10
+            )
+            self.create_subscription(
+                JointState, '/joint_states', self.joint_states_callback, 10
+            )
 
         self.command = 's'
-
-        self.create_subscription(
-            JointState, '/joint_states', self.joint_states_callback, 10
-        )
 
         self.timer = self.create_timer(self.dt, self.update)
 
@@ -444,7 +455,8 @@ class QuadCrawl(Node):
         ).start()
 
         self.get_logger().info(
-            'Quadruped controller ready: f = move, s = stand'
+            'Quadruped controller ready (%s): f = move, s = stand'
+            % ('real robot, publishing /joint_states' if self.real else 'Gazebo')
         )
 
     # ---------- Speed limit ----------
@@ -579,8 +591,14 @@ class QuadCrawl(Node):
 
         positions = self.limit_speed(positions)
 
-        msg = Float64MultiArray()
-        msg.data = [float(v) for v in positions]
+        if self.real:
+            msg = JointState()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.name = list(self.joint_names)
+            msg.position = [float(v) for v in positions]
+        else:
+            msg = Float64MultiArray()
+            msg.data = [float(v) for v in positions]
         self.publisher.publish(msg)
         self.last_command = list(positions)
 
@@ -613,11 +631,12 @@ def main(args=None):
 
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
